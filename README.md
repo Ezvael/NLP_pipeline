@@ -5,9 +5,8 @@ project/
 ├── nlp_prep.py                    # main preprocessing pipeline
 ├── semantic.py                    # sentiment pipeline
 │
-├── config.py                      # all constants & dictionaries
-├── text_utils.py                  # low-level helpers (lemma, normalization)
-├── text_features.py               # tagging, topics, detection logic
+├── nlp_config.py                  # all constants & dictionaries
+├── nlp_features.py                # tagging, topics, detection logic
 │
 └── data/
     ├── input.csv                  # outputs of the scrappers
