@@ -1,5 +1,5 @@
 # NLP_pipeline
-
+```
 project/
 │
 ├── nlp_prep.py                    # main preprocessing pipeline
@@ -13,3 +13,4 @@ project/
     ├── input.csv                  # outputs of the scrappers
     ├── preprocessed.parquet       # outputs of nlp_prep.py
     └── semantic.parquet           # outputs of the semantic.py
+```
