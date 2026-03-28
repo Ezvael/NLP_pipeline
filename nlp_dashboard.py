@@ -61,7 +61,7 @@ if selected_topics:
 
 # Header
 st.title("NLP Analytics Dashboard")
-st.caption("Real-time sentiment & topic analysis")
+st.caption("For sentiment & topic analysis")
 
 # KPI's
 col1, col2, col3, col4 = st.columns(4)
