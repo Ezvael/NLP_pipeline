@@ -2,9 +2,8 @@ import pandas as pd
 import spacy
 from joblib import Parallel, delayed
 from stop_words import get_stop_words
-
+import glob
 from nlp_config import POS_SLANG, NEG_SLANG, PROFANITY, BRANDS, TOPIC_KEYWORDS
-
 from nlp_features import (
     get_lemma, 
     normalize_elongation,
@@ -86,9 +85,10 @@ def preprocess_text(text):
         "topics": topics
     }
 
-def run_preprocessing():
-    df = pd.read_csv("data/pikabu_posts_wildberries.csv")
+def process_file(input_path, output_path):
+    df = pd.read_csv(input_path)
 
+    df["date"] = pd.to_datetime(df["date"], utc=True, errors="coerce").dt.tz_convert(None)
     df["combined_text"] = df["title"].fillna("") + " " + df["post_text"].fillna("")
 
     results = Parallel(n_jobs=-1, backend="threading")(
@@ -105,9 +105,20 @@ def run_preprocessing():
     df["tags_str"] = df["tags"].apply(lambda x: ",".join(x))
     df["topics_str"] = df["topics"].apply(lambda x: ",".join(x))
 
-    df.to_parquet("data/preprocessed.parquet", index=False)
+    df.to_parquet(output_path, index=False)
 
-    print("Preprocessing part is complete!")
+    print(f"Finished processing: {input_path}")
+
+def run_preprocessing():
+    input_files = glob.glob("data/pikabu_posts_*.csv")
+
+    for input_path in input_files:
+        name = input_path.split("pikabu_posts_")[-1].replace(".csv", "")
+        output_path = f"data/preprocessed_pikabu_{name}.parquet"
+
+        process_file(input_path, output_path)
+
+    print("Preprocessing is completed!")
 
 if __name__ == "__main__":
     run_preprocessing()
