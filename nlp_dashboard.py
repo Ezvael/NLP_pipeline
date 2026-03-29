@@ -10,16 +10,28 @@ st.set_page_config(
 # Load
 @st.cache_data
 def load_data():
-    df = pd.read_parquet("data/semantic.parquet")
-
+    df = pd.read_parquet("data/semantic_all_brands.parquet")
     df["text_length"] = df["processed_text"].str.len()
 
-    return df
+    sources = sorted(df["source"].dropna().unique())
+    brands = sorted(df["brand"].dropna().unique())
 
-df = load_data()
+    return df, sources, brands
+
+df, sources, brands = load_data()
 
 # Sidebar
 st.sidebar.title("Filters")
+
+selected_sources = st.sidebar.multiselect(
+    "Source", 
+    sources
+)
+
+selected_brands = st.sidebar.multiselect(
+    "Brand", 
+    brands
+)
 
 sentiments = st.sidebar.multiselect(
     "Sentiment",
@@ -43,6 +55,16 @@ selected_topics = st.sidebar.multiselect(
 
 # Filter
 filtered_df = df[df["sentiment"].isin(sentiments)]
+
+if selected_sources:
+    filtered_df = filtered_df[
+        filtered_df["source"].isin(selected_sources)
+    ]
+
+if selected_brands:
+    filtered_df = filtered_df[
+        filtered_df["brand"].isin(selected_brands)
+    ]
 
 if query:
     filtered_df = filtered_df[
