@@ -13,5 +13,5 @@ project/
 └── data/
     ├── input.csv                  # outputs of the scrappers
     ├── preprocessed.parquet       # outputs of nlp_prep.py
-    └── semantic.parquet           # outputs of the semantic.py
+    └── semantic.parquet           # outputs of nlp_semantic.py
 ```
