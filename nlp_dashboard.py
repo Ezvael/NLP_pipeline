@@ -137,7 +137,7 @@ st.subheader("Posts")
 
 st.dataframe(
     filtered_df[
-        ["date", "sentiment", "processed_text"]
+        ["date", "sentiment", "combined_text"]
     ].head(100),
     use_container_width=True
 )
