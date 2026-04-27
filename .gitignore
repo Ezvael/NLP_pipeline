@@ -1,0 +1,40 @@
+# Secrets — never commit your real API key
+config.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Trained model artefacts (large binary files)
+models/*.pkl
+
+# Data files (often large or sensitive)
+data/
+*.csv
+!data/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code & Obsidian workspace metadata
+.claude/
+.obsidian/

@@ -1,0 +1,18 @@
+# Core data / ML
+pandas
+numpy
+scikit-learn
+
+# Russian NLP
+nltk
+pymorphy3
+
+# Transformer-based sentiment (RuBERT)
+torch
+transformers
+
+# LLM API client (for ai_labeling.py)
+openai
+
+# Progress bars
+tqdm

@@ -1,0 +1,6 @@
+{
+  "_comment": "Copy this file to config.json and fill in your credentials. config.json is gitignored.",
+  "api_key": "YOUR_API_KEY_HERE",
+  "base_url": "https://litellm.tokengate.ru/v1",
+  "model": "deepseek/deepseek-chat"
+}
