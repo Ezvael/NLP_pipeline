@@ -34,7 +34,7 @@ def batch_sentiment(texts, batch_size=32):
         all_probs.extend(probs)
     return all_probs
 
-def predict_transformer_sentiment(df, text_column='Комментарий', tags_column='tags'):
+def predict_transformer_sentiment(df, text_column='comment', tags_column='tags'):
     df_copy = df.copy()
     df_copy[text_column] = df_copy[text_column].fillna("")
     if tags_column in df_copy.columns:

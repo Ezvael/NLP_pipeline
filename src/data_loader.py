@@ -35,7 +35,7 @@ def json_to_csv(input_file: str, output_file: str) -> None:
           ...
         }
 
-    The resulting CSV has two columns: ``url`` and ``Комментарий``.
+    The resulting CSV has two columns: ``url`` and ``comment``.
 
     Args:
         input_file:  Path to the source ``.json`` file.
@@ -50,7 +50,7 @@ def json_to_csv(input_file: str, output_file: str) -> None:
 
     with open(output_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["url", "Комментарий"])
+        writer.writerow(["url", "comment"])
         for url, comments in data.items():
             for comment in comments:
                 writer.writerow([url, comment])
@@ -133,13 +133,13 @@ def combine_csv_files(folder_path: str) -> pd.DataFrame:
     return combined
 
 
-def load_dataset(filepath: str, text_column: str = "Комментарий") -> pd.DataFrame:
+def load_dataset(filepath: str, text_column: str = "comment") -> pd.DataFrame:
     """Load a CSV dataset and validate that the required text column exists.
 
     Args:
         filepath:    Path to the ``.csv`` file.
         text_column: Name of the column that contains raw comment text.
-                     Defaults to ``"Комментарий"``.
+                     Defaults to ``"comment"``.
 
     Returns:
         The loaded :class:`pandas.DataFrame`.

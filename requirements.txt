@@ -4,8 +4,8 @@ numpy
 scikit-learn
 
 # Russian NLP
-nltk
 pymorphy3
+stop-words
 
 # Transformer-based sentiment (RuBERT)
 torch
@@ -16,3 +16,7 @@ openai
 
 # Progress bars
 tqdm
+
+# Dashboard
+streamlit
+plotly

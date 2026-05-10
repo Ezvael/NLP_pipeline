@@ -12,7 +12,7 @@ Typical usage
 >>> from src.predict import load_model_artifacts, predict_on_new_data
 >>>
 >>> df = pd.read_csv("input.csv")
->>> df_processed = preprocess_data(df, text_column="Комментарий")
+>>> df_processed = preprocess_data(df, text_column="comment")
 >>> artifacts = load_model_artifacts("models/")
 >>> df_result = predict_on_new_data(df_processed, artifacts)
 """
@@ -102,7 +102,7 @@ def predict_on_new_data(df: pd.DataFrame, artifacts: dict, skip_transformer_sent
 
     # Predict Sentiment using Transformer model
     if not skip_transformer_sentiment:
-        df_processed = predict_transformer_sentiment(df_processed, text_column='Комментарий')
+        df_processed = predict_transformer_sentiment(df_processed, text_column='comment')
     else:
         print("Skipping transformer-based sentiment prediction as requested.")
         df_processed['transformer_sentiment'] = None

@@ -32,29 +32,34 @@ def train_and_evaluate_ml_models(df, text_column, cluster_target_column, sentime
     Xs_train, Xs_valid, s_train, s_valid = train_test_split(Xs_train_all, s_train_all, test_size=0.5, random_state=RANDOM_STATE, stratify=s_train_all)
 
     # TF-IDF Vectorization for clusters
-    count_idf_cluster = TfidfVectorizer()
+    count_idf_cluster = TfidfVectorizer(
+        max_features=30_000, ngram_range=(1, 2), min_df=3, max_df=0.95
+    )
     X_cluster_train = count_idf_cluster.fit_transform(Xc_train)
     X_cluster_valid = count_idf_cluster.transform(Xc_valid)
     X_cluster_test = count_idf_cluster.transform(Xc_test)
 
     # TF-IDF Vectorization for sentiment
-    count_idf_sentiment = TfidfVectorizer()
+    count_idf_sentiment = TfidfVectorizer(
+        max_features=30_000, ngram_range=(1, 2), min_df=3, max_df=0.95
+    )
     X_sentiment_train = count_idf_sentiment.fit_transform(Xs_train)
     X_sentiment_valid = count_idf_sentiment.transform(Xs_valid)
     X_sentiment_test = count_idf_sentiment.transform(Xs_test)
 
     # --- Logistic Regression for Clusters ---
+    # Note: 'penalty' param deprecated in sklearn 1.8 — use C / l1_ratio instead
     print("Training Logistic Regression for Clusters...")
-    clf_lr_cluster = LogisticRegression(random_state=RANDOM_STATE, max_iter=1000)
+    clf_lr_cluster = LogisticRegression(random_state=RANDOM_STATE, max_iter=2000, class_weight='balanced')
     parameters_lr = parameters = [
-            {'solver': ['lbfgs'], 'penalty': ['l2'], 'C': [0.5, 1.0, 1.5]},
-            {'solver': ['saga'], 'penalty': ['l1', 'l2'], 'C': [0.5, 1.0], 'fit_intercept': [True]}
+            {'solver': ['lbfgs'], 'C': [0.5, 1.0, 2.0], 'fit_intercept': [True, False]},
+            {'solver': ['saga'], 'C': [0.5, 1.0], 'l1_ratio': [0.0, 1.0], 'fit_intercept': [True, False]}
         ]
     rnd_lr_cluster = RandomizedSearchCV(clf_lr_cluster,
                                         parameters,
-                                        n_iter=10,  # ключевой параметр
+                                        n_iter=5,
                                         scoring='f1_macro',
-                                        n_jobs=-1,  # параллелизация
+                                        n_jobs=-1,
                                         random_state=RANDOM_STATE
                                     )
     rnd_lr_cluster.fit(X_cluster_train, c_train)
@@ -73,24 +78,13 @@ def train_and_evaluate_ml_models(df, text_column, cluster_target_column, sentime
 
     # --- Linear SVM for Clusters ---
     print("Training Linear SVM for Clusters...")
-    clf_svm_cluster = LinearSVC(random_state=RANDOM_STATE, max_iter=2000, tol=0.001)
+    clf_svm_cluster = LinearSVC(random_state=RANDOM_STATE, max_iter=5000, tol=0.001, class_weight='balanced')
     parameters_svm = parameters = [
-                                    # стандартный быстрый вариант
                                     {
-                                        'penalty': ['l2'],
-                                        'loss': ['hinge', 'squared_hinge'],
-                                        'C': [0.25, 0.5],
-                                        'fit_intercept': [True]
-                                    },
-                                    
-                                    # l1 работает только так
-                                    {
-                                        'penalty': ['l1'],
                                         'loss': ['squared_hinge'],
-                                        'dual': [False],
-                                        'C': [0.25, 0.5],
-                                        'fit_intercept': [True]
-                                    }
+                                        'C': [0.25, 0.5, 1.0],
+                                        'fit_intercept': [True, False]
+                                    },
                                 ]
     rnd_svm_cluster = rnd = RandomizedSearchCV(
                                                 clf_svm_cluster,
@@ -116,8 +110,8 @@ def train_and_evaluate_ml_models(df, text_column, cluster_target_column, sentime
 
     # --- Logistic Regression for Sentiment ---
     print("Training Logistic Regression for Sentiment...")
-    clf_lr_sentiment = LogisticRegression(random_state=RANDOM_STATE, max_iter=2000)
-    rnd_lr_sentiment = RandomizedSearchCV(clf_lr_sentiment, parameters_lr, scoring='f1_macro', error_score=np.nan, random_state=RANDOM_STATE)
+    clf_lr_sentiment = LogisticRegression(random_state=RANDOM_STATE, max_iter=2000, class_weight='balanced')
+    rnd_lr_sentiment = RandomizedSearchCV(clf_lr_sentiment, parameters_lr, n_iter=5, scoring='f1_macro', error_score=np.nan, n_jobs=-1, random_state=RANDOM_STATE)
     rnd_lr_sentiment.fit(X_sentiment_train, s_train)
     best_lr_sentiment = rnd_lr_sentiment.best_estimator_
     
@@ -134,7 +128,7 @@ def train_and_evaluate_ml_models(df, text_column, cluster_target_column, sentime
 
     # --- Linear SVM for Sentiment ---
     print("Training Linear SVM for Sentiment...")
-    clf_svm_sentiment = LinearSVC(random_state=RANDOM_STATE, max_iter=2000, tol=0.001)
+    clf_svm_sentiment = LinearSVC(random_state=RANDOM_STATE, max_iter=5000, tol=0.001, class_weight='balanced')
     rnd_svm_sentiment = RandomizedSearchCV(clf_svm_sentiment, parameters_svm, scoring='f1_macro', error_score=np.nan, random_state=RANDOM_STATE)
     rnd_svm_sentiment.fit(X_sentiment_train, s_train)
     best_svm_sentiment = rnd_svm_sentiment.best_estimator_

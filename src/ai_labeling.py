@@ -133,7 +133,7 @@ def label_dataset(
     api_key: str,
     base_url: str,
     model: str,
-    text_column: str = "Комментарий",
+    text_column: str = "comment",
     batch_size: int = 80,
     sleep_between_batches: float = 0.5,
 ) -> pd.DataFrame:

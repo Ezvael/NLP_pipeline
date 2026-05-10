@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 
 import pandas as pd
@@ -8,24 +9,38 @@ import streamlit as st
 st.set_page_config(page_title="NLP Analytics Dashboard", layout="wide")
 
 
-def parse_input_file() -> str:
+def parse_args():
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--input_file", default="predictions.csv")
+    parser.add_argument("--raw_counts",
+                        default=os.path.join("models", "raw_counts_per_date.csv"),
+                        help="CSV with columns: date, total_comments (pre-regex raw counts)")
     args, _ = parser.parse_known_args()
-    return args.input_file
+    return args
+
+
+def parse_input_file() -> str:
+    return parse_args().input_file
 
 
 @st.cache_data
 def load_data(path: str):
+    if not os.path.exists(path):
+        st.error(f"Data file not found: `{path}`\n\n"
+                 "Run `python run_full_test.py` first to generate predictions.csv, "
+                 "or pass a different path via `--input_file`.")
+        st.stop()
     df = pd.read_csv(path, encoding='utf-8-sig')
 
-    # Normalise text column: accept 'comment' as alias for 'Комментарий'
-    if "Комментарий" not in df.columns and "comment" in df.columns:
-        df = df.rename(columns={"comment": "Комментарий"})
+    # Normalise text column — accept several aliases for 'comment'
+    for alias in ("Комментарий", "Kommentarij"):
+        if "comment" not in df.columns and alias in df.columns:
+            df = df.rename(columns={alias: "comment"})
+            break
 
     # Prefer transformer sentiment (when it has actual values);
     # fall back to predicted_ml_sentiment, then to the original LLM label
-    for fallback in ("predicted_ml_sentiment", "sentiment_mode", "sentiment"):
+    for fallback in ("predicted_sentiment", "predicted_ml_sentiment", "sentiment_mode", "sentiment"):
         if df.get("transformer_sentiment") is None or df["transformer_sentiment"].isna().all():
             if fallback in df.columns:
                 df["transformer_sentiment"] = df[fallback]
@@ -38,7 +53,24 @@ def load_data(path: str):
                 df["predicted_cluster"] = df[fallback]
                 break
 
-    df["text_length"] = df["Комментарий"].astype(str).str.len()
+    df["text_length"] = df["comment"].astype(str).str.len()
+
+    # Enrich with post dates + domain from ozon_comments.csv when input has Ссылка but no date
+    if "date" not in df.columns and "Ссылка" in df.columns:
+        _url_date_path = (
+            r"C:\Users\Deniz\PycharmProjects\pythonProject\Analyse comments"
+            r"\Datasets processing\Csv with posts\ozon_comments.csv"
+        )
+        if os.path.exists(_url_date_path):
+            _ud = pd.read_csv(_url_date_path, usecols=["url", "date", "domain"])
+            df = df.merge(_ud.rename(columns={"url": "Ссылка"}), on="Ссылка", how="left")
+
+    # Domain fallback: extract from VK URL
+    if "domain" not in df.columns and "Ссылка" in df.columns:
+        df["domain"] = (
+            df["Ссылка"].astype(str)
+            .str.extract(r"vk\.com/([^/_?#]+)", expand=False)
+        )
 
     if "date" in df.columns:
         # Handle Unix timestamps (int) as well as date strings
@@ -50,8 +82,20 @@ def load_data(path: str):
     return df
 
 
-input_file = parse_input_file()
+_args      = parse_args()
+input_file = _args.input_file
 df = load_data(input_file)
+
+# Load pre-computed raw comment counts per date (saved by run_full_test.py)
+@st.cache_data
+def load_raw_counts(path: str) -> pd.DataFrame | None:
+    if not os.path.exists(path):
+        return None
+    rc = pd.read_csv(path)
+    rc["date"] = pd.to_datetime(rc["date"], errors="coerce")
+    return rc.dropna(subset=["date"]).sort_values("date")
+
+df_raw_counts = load_raw_counts(_args.raw_counts)
 
 # Sidebar
 st.sidebar.title("Filters")
@@ -97,7 +141,7 @@ if len(date_range) == 2 and "date" in filtered.columns:
 
 if query:
     filtered = filtered[
-        filtered["Комментарий"].astype(str).str.contains(query, na=False, case=False)
+        filtered["comment"].astype(str).str.contains(query, na=False, case=False)
     ]
 
 # Header
@@ -105,13 +149,20 @@ st.title("NLP Analytics Dashboard")
 st.caption(f"Source: `{input_file}` — {len(filtered):,} posts shown")
 
 # KPIs
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3, col4, col5 = st.columns(5)
 col1.metric("Posts", f"{len(filtered):,}")
 col2.metric("Avg Length", int(filtered["text_length"].mean()) if len(filtered) else 0)
 pos_pct = (filtered["transformer_sentiment"] == "positive").mean()
 neg_pct = (filtered["transformer_sentiment"] == "negative").mean()
 col3.metric("Positive %", f"{pos_pct:.1%}")
 col4.metric("Negative %", f"{neg_pct:.1%}")
+if "tags" in filtered.columns and len(filtered):
+    tox_pct = filtered["tags"].apply(
+        lambda x: "TAG_PROFANITY" in (x if isinstance(x, list) else [])
+    ).mean()
+    col5.metric("Toxic %", f"{tox_pct:.1%}")
+else:
+    col5.metric("Toxic %", "N/A")
 
 # Charts row 1
 colA, colB = st.columns(2)
@@ -159,10 +210,100 @@ if "predicted_cluster" in filtered.columns:
     fig.update_layout(showlegend=False)
     st.plotly_chart(fig, use_container_width=True)
 
+# Cluster share over time (cluster counts from filtered / raw total per date)
+if (
+    df_raw_counts is not None
+    and "predicted_cluster" in filtered.columns
+    and "date" in filtered.columns
+    and filtered["date"].notna().any()
+):
+    st.subheader("Cluster mentions over time")
+
+    CLUSTER_COLORS_SHARE = {
+        "delay":           "#4C78A8",
+        "chatbot":         "#F58518",
+        "pricing":         "#E45756",
+        "recommendations": "#54A24B",
+    }
+    target_clusters = list(CLUSTER_COLORS_SHARE.keys())
+
+    # Granularity selector
+    granularity = st.selectbox(
+        "Period",
+        options=["Week", "Month", "Quarter"],
+        index=1,
+        key="share_granularity",
+    )
+    freq_map = {"Week": "W", "Month": "M", "Quarter": "Q"}
+    freq = freq_map[granularity]
+
+    # Cluster counts per period from filtered df
+    filt_copy = filtered[filtered["predicted_cluster"].isin(target_clusters)].copy()
+    filt_copy["_period"] = filt_copy["date"].dt.to_period(freq).dt.to_timestamp()
+    cluster_per_period = (
+        filt_copy.groupby(["_period", "predicted_cluster"])
+        .size()
+        .reset_index(name="count")
+        .rename(columns={"_period": "period", "predicted_cluster": "cluster"})
+    )
+
+    # Raw totals aggregated to same period
+    rc_period = df_raw_counts.copy()
+    rc_period["period"] = rc_period["date"].dt.to_period(freq).dt.to_timestamp()
+    rc_period = rc_period.groupby("period")["total_comments"].sum().reset_index(name="total")
+
+    if not cluster_per_period.empty:
+        import plotly.graph_objects as go
+
+        fig_overlay = go.Figure()
+        for cluster, color in CLUSTER_COLORS_SHARE.items():
+            sub = cluster_per_period[cluster_per_period["cluster"] == cluster]
+            fig_overlay.add_trace(go.Bar(
+                x=sub["period"], y=sub["count"],
+                name=cluster, marker_color=color,
+                yaxis="y1",
+            ))
+        fig_overlay.add_trace(go.Scatter(
+            x=rc_period["period"], y=rc_period["total"],
+            name="Total comments", mode="lines+markers",
+            line=dict(color="#6C757D", width=2, dash="dot"),
+            marker=dict(size=4),
+            yaxis="y2",
+        ))
+        fig_overlay.update_layout(
+            title=f"Cluster mentions vs. total volume ({granularity.lower()})",
+            barmode="group", bargap=0.15,
+            xaxis=dict(title="Period"),
+            yaxis=dict(title="Cluster comments", side="left"),
+            yaxis2=dict(title="Total comments", side="right", overlaying="y", showgrid=False),
+            hovermode="x unified",
+            legend=dict(orientation="h", y=1.05, x=0),
+        )
+        st.plotly_chart(fig_overlay, use_container_width=True)
+    else:
+        st.info("Not enough data to build the chart.")
+
+# Sarcasm chart (only when tags column is present)
+if "tags" in filtered.columns:
+    st.subheader("Sarcasm usage")
+    sarcasm_df = pd.DataFrame({
+        "type":  ["sarcastic", "non-sarcastic"],
+        "count": [
+            filtered["tags"].apply(
+                lambda x: "TAG_SARCASM" in (x if isinstance(x, list) else [])
+            ).sum(),
+            filtered["tags"].apply(
+                lambda x: "TAG_SARCASM" not in (x if isinstance(x, list) else [])
+            ).sum(),
+        ],
+    })
+    fig = px.pie(sarcasm_df, names="type", values="count")
+    st.plotly_chart(fig, use_container_width=True)
+
 # Posts table
 st.subheader("Posts")
-table_cols = [c for c in ["date", "domain", "Комментарий", "transformer_sentiment",
-                           "transformer_sentiment_confidence", "predicted_cluster"]
+table_cols = [c for c in ["date", "domain", "comment", "transformer_sentiment",
+                           "transformer_sentiment_confidence", "predicted_cluster", "tags"]
               if c in filtered.columns]
 st.dataframe(filtered[table_cols].head(200), use_container_width=True)
 

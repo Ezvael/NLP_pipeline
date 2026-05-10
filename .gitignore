@@ -35,6 +35,9 @@ data/
 .DS_Store
 Thumbs.db
 
+# Runtime logs
+logs/
+
 # Claude Code & Obsidian workspace metadata
 .claude/
 .obsidian/

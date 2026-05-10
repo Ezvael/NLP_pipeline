@@ -6,7 +6,7 @@ The pipeline has five modes selected via --mode:
   label            AI-label a raw CSV with cluster + sentiment using an LLM.
                    Requires config.json with api_key, base_url, model.
   train            Preprocess data + train ML models + save artefacts.
-                   Input CSV must have columns: Комментарий, cluster_mode, sentiment_mode.
+                   Input CSV must have columns: comment, cluster_mode, sentiment_mode.
   predict          Preprocess data + load saved models + run predictions.
   build_dashboard  Merge post metadata (JSON) with labelled comments into one CSV.
 
@@ -53,10 +53,13 @@ from src.predict import predict_on_new_data, load_model_artifacts
 
 # Column aliases accepted as input (keys → canonical pipeline names)
 _COLUMN_ALIASES = {
-    "comment":      "Комментарий",
-    "new_comment":  "new comment",
-    "cluster":      "cluster_mode",
-    "sentiment":    "sentiment_mode",
+    "Комментарий":           "comment",        # old Cyrillic column name -> canonical
+    "Kommentarij":           "comment",        # combined_labeled.csv ASCII alias
+    "new_comment":           "new comment",
+    "cluster":               "cluster_mode",
+    "predicted_cluster":     "cluster_mode",   # LLM-labeled output used as train target
+    "sentiment":             "sentiment_mode",
+    "predicted_sentiment":   "sentiment_mode", # LLM-labeled output used as train target
 }
 
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -87,8 +90,9 @@ def run_label(args):
     print(f"Loading data from '{args.input_file}'...")
     df = pd.read_csv(args.input_file, encoding='utf-8-sig')
 
-    if "Комментарий" not in df.columns:
-        print("Error: input CSV must contain a 'Комментарий' column.")
+    df = _normalize_columns(df)
+    if "comment" not in df.columns:
+        print("Error: input CSV must contain a 'comment' (or 'Комментарий') column.")
         sys.exit(1)
 
     print(f"Labeling {len(df)} comments with model '{cfg['model']}'...")
@@ -97,7 +101,7 @@ def run_label(args):
         api_key=cfg["api_key"],
         base_url=cfg["base_url"],
         model=cfg["model"],
-        text_column="Комментарий",
+        text_column="comment",
         batch_size=args.batch_size,
     )
 
@@ -115,8 +119,8 @@ def run_train(args):
     print(f"Loading data from '{args.input_file}'...")
     df = _normalize_columns(pd.read_csv(args.input_file, encoding='utf-8-sig'))
 
-    if "Комментарий" not in df.columns:
-        print("Error: input CSV must contain a 'Комментарий' (or 'comment') column.")
+    if "comment" not in df.columns:
+        print("Error: input CSV must contain a 'comment' (or 'Комментарий') column.")
         sys.exit(1)
 
     required_targets = ["cluster_mode", "sentiment_mode"]
@@ -165,8 +169,8 @@ def run_predict(args):
     print(f"Loading data from '{args.input_file}'...")
     df = _normalize_columns(pd.read_csv(args.input_file, encoding='utf-8-sig'))
 
-    if "Комментарий" not in df.columns:
-        print("Error: input CSV must contain a 'Комментарий' (or 'comment') column.")
+    if "comment" not in df.columns:
+        print("Error: input CSV must contain a 'comment' (or 'Комментарий') column.")
         sys.exit(1)
 
     if "new comment" in df.columns:
@@ -194,6 +198,39 @@ def run_predict(args):
     os.makedirs(os.path.dirname(args.output_file) or ".", exist_ok=True)
     df_result.to_csv(args.output_file, index=False, encoding='utf-8-sig')
     print(f"Predictions saved to '{args.output_file}'")
+
+    if args.posts_csv:
+        posts = pd.read_csv(args.posts_csv, usecols=["url", "date", "domain"])
+
+        # Merge date + domain into predictions
+        df_result = pd.read_csv(args.output_file, encoding="utf-8-sig")
+        df_result = df_result.merge(posts[["url", "date", "domain"]], on="url", how="left")
+        df_result.to_csv(args.output_file, index=False, encoding="utf-8-sig")
+        n_dated = df_result["date"].notna().sum()
+        print(f"  Enriched with dates/domain from '{args.posts_csv}' ({n_dated:,} rows matched)")
+
+        # Save raw_counts_per_date.csv for dashboard denominator
+        raw_counts_path = os.path.join(args.model_dir, "raw_counts_per_date.csv")
+        date_col = pd.to_datetime(posts["date"], unit="s", errors="coerce")
+        rc = (date_col.dt.date
+              .value_counts()
+              .rename_axis("date")
+              .reset_index(name="total_comments")
+              .sort_values("date"))
+        rc.to_csv(raw_counts_path, index=False)
+        print(f"  Raw counts per date saved → {raw_counts_path} ({len(rc)} unique dates)")
+
+
+# ---------------------------------------------------------------------------
+# Mode: convert
+# ---------------------------------------------------------------------------
+
+def run_convert(args):
+    """Convert a raw JSON comments file to a flat CSV (url, comment)."""
+    from src.data_loader import json_to_csv
+
+    os.makedirs(os.path.dirname(args.output_file) or ".", exist_ok=True)
+    json_to_csv(args.input_file, args.output_file)
 
 
 # ---------------------------------------------------------------------------
@@ -238,10 +275,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="mode", required=True)
 
+    # ── convert ────────────────────────────────────────────────────────────
+    p_conv = sub.add_parser("convert",
+                            help="Convert a raw JSON comments file to a flat CSV (url, comment).")
+    p_conv.add_argument("--input_file",  required=True,
+                        help="Path to source .json file ({url: [comment, ...]} format).")
+    p_conv.add_argument("--output_file", default="data/ozon_flat.csv",
+                        help="Where to save the flat CSV (default: data/ozon_flat.csv).")
+
     # ── label ──────────────────────────────────────────────────────────────
     p_label = sub.add_parser("label", help="Label a raw CSV with cluster + sentiment via LLM.")
     p_label.add_argument("--input_file", required=True,
-                         help="Path to input CSV (must have 'Комментарий' column).")
+                         help="Path to input CSV (must have 'comment' column).")
     p_label.add_argument("--output_file", default="data/labeled/labeled.csv",
                          help="Where to save the labeled CSV.")
     p_label.add_argument("--config", default="config.json",
@@ -252,20 +297,24 @@ def build_parser() -> argparse.ArgumentParser:
     # ── train ──────────────────────────────────────────────────────────────
     p_train = sub.add_parser("train", help="Train ML models on labelled data.")
     p_train.add_argument("--input_file", required=True,
-                         help="Labeled CSV with 'Комментарий', 'cluster_mode', 'sentiment_mode'.")
+                         help="Labeled CSV with 'comment', 'cluster_mode', 'sentiment_mode'.")
     p_train.add_argument("--model_dir", default="models",
                          help="Directory to save trained model .pkl files (default: models/).")
 
     # ── predict ────────────────────────────────────────────────────────────
     p_pred = sub.add_parser("predict", help="Run cluster + sentiment prediction on new data.")
     p_pred.add_argument("--input_file", required=True,
-                        help="Path to input CSV (must have 'Комментарий' column).")
+                        help="Path to input CSV (must have 'comment' column).")
     p_pred.add_argument("--output_file", default="predictions.csv",
                         help="Where to save predictions CSV (default: predictions.csv).")
     p_pred.add_argument("--model_dir", default="models",
                         help="Directory containing trained model .pkl files (default: models/).")
     p_pred.add_argument("--skip_transformer_sentiment", action="store_true",
                         help="Skip RuBERT transformer inference (faster but less accurate).")
+    p_pred.add_argument("--posts_csv", default=None,
+                        help="CSV with columns url, date, domain (one row per post). "
+                             "When provided, enriches predictions with date/domain and "
+                             "saves models/raw_counts_per_date.csv for the dashboard.")
 
     # ── build_dashboard ────────────────────────────────────────────────────
     p_dash = sub.add_parser("build_dashboard",
@@ -296,6 +345,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     dispatch = {
+        "convert":         run_convert,
         "label":           run_label,
         "train":           run_train,
         "predict":         run_predict,

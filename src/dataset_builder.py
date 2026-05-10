@@ -34,7 +34,7 @@ def merge_metadata_with_comments(
 
     The *processed_df* is expected to have columns produced by the full
     pipeline (``AgentPlatform.ipynb`` → ``Prepare full df.ipynb`` flow),
-    including at minimum ``Ссылка`` (or ``url``), ``Комментарий``,
+    including at minimum ``Ссылка`` (or ``url``), ``comment`` (or ``Комментарий``),
     ``new comment``, ``cluster``, and ``sentiment``.
 
     Args:

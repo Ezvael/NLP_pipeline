@@ -1,0 +1,69 @@
+
+Full training set: 103,912 rows
+Training Logistic Regression for Clusters...
+--- Classification Report for Logistic Regression (Clusters - Test Set) ---
+                 precision    recall  f1-score   support
+
+        chatbot       0.52      0.62      0.56      3876
+          delay       0.69      0.71      0.70      7888
+     no_cluster       0.94      0.87      0.90     18000
+        pricing       0.33      0.48      0.39      1117
+recommendations       0.32      0.35      0.34       181
+        suggest       0.49      0.46      0.48       112
+
+       accuracy                           0.78     31174
+      macro avg       0.55      0.58      0.56     31174
+   weighted avg       0.80      0.78      0.79     31174
+
+Training Linear SVM for Clusters...
+--- Classification Report for Linear SVM (Clusters - Test Set) ---
+                 precision    recall  f1-score   support
+
+        chatbot       0.57      0.56      0.57      3876
+          delay       0.70      0.73      0.71      7888
+     no_cluster       0.92      0.90      0.91     18000
+        pricing       0.37      0.43      0.40      1117
+recommendations       0.42      0.34      0.38       181
+        suggest       0.54      0.46      0.50       112
+
+       accuracy                           0.79     31174
+      macro avg       0.59      0.57      0.58     31174
+   weighted avg       0.80      0.79      0.79     31174
+
+Training Logistic Regression for Sentiment...
+--- Classification Report for Logistic Regression (Sentiment - Test Set) ---
+              precision    recall  f1-score   support
+
+    negative       0.65      0.82      0.72      8686
+     neutral       0.92      0.83      0.87     22179
+    positive       0.08      0.08      0.08       309
+
+    accuracy                           0.82     31174
+   macro avg       0.55      0.57      0.56     31174
+weighted avg       0.84      0.82      0.82     31174
+
+Training Linear SVM for Sentiment...
+--- Classification Report for Linear SVM (Sentiment - Test Set) ---
+              precision    recall  f1-score   support
+
+    negative       0.67      0.76      0.71      8686
+     neutral       0.90      0.86      0.88     22179
+    positive       0.08      0.03      0.04       309
+
+    accuracy                           0.82     31174
+   macro avg       0.55      0.55      0.54     31174
+weighted avg       0.83      0.82      0.82     31174
+
+--- Model Training and Evaluation Complete ---
+  analysed_parameter                  alg  ... score_train score_valid
+0            cluster  Logistic Regression  ...    0.853586    0.556204
+1            cluster           Linear SVM  ...    0.878472    0.565011
+2          sentiment  Logistic Regression  ...    0.874492    0.576563
+3          sentiment           Linear SVM  ...    0.904430    0.567783
+
+[4 rows x 6 columns]
+--- Final Model Evaluation on Test Sets ---
+Best Cluster Model (via LinearSVC) F1-score on test set: 0.5768
+Best ML Sentiment Model (via LinearSVC) F1-score on test set: 0.5443
+
+Total training time: 828.1s
