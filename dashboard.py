@@ -176,7 +176,7 @@ with colA:
         color_discrete_map={"positive": "#2ecc71", "neutral": "#95a5a6", "negative": "#e74c3c"},
     )
     fig.update_layout(showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 with colB:
     if "date" in filtered.columns and filtered["date"].notna().any():
@@ -193,13 +193,13 @@ with colB:
             color="transformer_sentiment",
             color_discrete_map={"positive": "#2ecc71", "neutral": "#95a5a6", "negative": "#e74c3c"},
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     elif "domain" in filtered.columns:
         st.subheader("Posts by domain")
         domain_df = filtered["domain"].value_counts().reset_index()
         domain_df.columns = ["domain", "count"]
         fig = px.bar(domain_df, x="domain", y="count")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
 # Charts row 2 — clusters
 if "predicted_cluster" in filtered.columns:
@@ -208,7 +208,7 @@ if "predicted_cluster" in filtered.columns:
     cluster_df.columns = ["cluster", "count"]
     fig = px.bar(cluster_df, x="cluster", y="count", color="cluster")
     fig.update_layout(showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 # Cluster share over time (cluster counts from filtered / raw total per date)
 if (
@@ -247,10 +247,14 @@ if (
         .rename(columns={"_period": "period", "predicted_cluster": "cluster"})
     )
 
-    # Raw totals aggregated to same period
-    rc_period = df_raw_counts.copy()
-    rc_period["period"] = rc_period["date"].dt.to_period(freq).dt.to_timestamp()
-    rc_period = rc_period.groupby("period")["total_comments"].sum().reset_index(name="total")
+    # Raw totals aggregated to same period.
+    # df_raw_counts now has columns: date, domain, total_comments.
+    # Apply domain filter when active; otherwise sum across all domains.
+    rc_src = df_raw_counts.copy()
+    if selected_domains and "domain" in rc_src.columns:
+        rc_src = rc_src[rc_src["domain"].isin(selected_domains)]
+    rc_src["period"] = rc_src["date"].dt.to_period(freq).dt.to_timestamp()
+    rc_period = rc_src.groupby("period")["total_comments"].sum().reset_index(name="total")
 
     if not cluster_per_period.empty:
         import plotly.graph_objects as go
@@ -279,7 +283,7 @@ if (
             hovermode="x unified",
             legend=dict(orientation="h", y=1.05, x=0),
         )
-        st.plotly_chart(fig_overlay, use_container_width=True)
+        st.plotly_chart(fig_overlay, width="stretch")
     else:
         st.info("Not enough data to build the chart.")
 
@@ -298,13 +302,13 @@ if "tags" in filtered.columns:
         ],
     })
     fig = px.pie(sarcasm_df, names="type", values="count")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 # Posts table
 st.subheader("Posts")
 table_cols = [c for c in ["date", "domain", "comment", "transformer_sentiment",
                            "transformer_sentiment_confidence", "predicted_cluster", "tags"]
               if c in filtered.columns]
-st.dataframe(filtered[table_cols].head(200), use_container_width=True)
+st.dataframe(filtered[table_cols].head(200), width="stretch")
 
 # python -m streamlit run dashboard.py

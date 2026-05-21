@@ -4,10 +4,11 @@ An end-to-end NLP pipeline for analysing **Russian marketplace reviews** (Ozon, 
 
 Given raw comments the pipeline will:
 1. **Convert** raw JSON comments to a flat CSV.
-2. **Label** comments with an LLM — assign a topic cluster and sentiment (used to build training data).
-3. **Train** lightweight ML models (Logistic Regression + Linear SVM with TF-IDF, `class_weight='balanced'`) for cluster and sentiment classification.
+2. **Label** comments with an LLM — assign a topic cluster and sentiment (creates training data without manual annotation).
+3. **Train** lightweight ML models (Logistic Regression + Linear SVM with TF-IDF, `class_weight='balanced'`) on the LLM-labeled data.
 4. **Predict** cluster and sentiment on new, unlabelled data — combining ML models with a RuBERT transformer for sentiment.
-5. **Visualise** results in an interactive Streamlit dashboard.
+5. **Build raw counts** — aggregate total comment volume per date and domain (dashboard denominator).
+6. **Visualise** results in an interactive Streamlit dashboard.
 
 ---
 
@@ -35,17 +36,18 @@ full_prediction_project/
 │   ├── cleaner.py               # URL removal, lowercase, whitespace normalisation
 │   ├── feature_extractor.py     # Emoji, slang and profanity tag detection
 │   ├── topic_detector.py        # Token-based keyword topic detection
-│   ├── preprocessing.py         # Text cleaning, lemmatization, regex clustering
-│   ├── data_loader.py           # JSON → CSV conversion, dataset loading utilities
-│   ├── dataset_builder.py       # Merge post metadata + comments for dashboard
+│   ├── preprocessing.py         # Text cleaning, lemmatization, regex pre-filtering
+│   ├── data_loader.py           # JSON → CSV conversion, date enrichment utilities
 │   ├── ai_labeling.py           # LLM-based cluster + sentiment labeling
 │   ├── ml_models.py             # TF-IDF + LR/SVM training & evaluation
 │   ├── sentiment_model.py       # RuBERT transformer sentiment inference
 │   └── predict.py               # Prediction pipeline (loads saved models)
 │
-├── dev/                         # Development & research utilities (not part of pipeline)
-│   ├── compare_lemmatizers.py
-│   └── compare_detailed.py
+├── dev/                         # Research & calibration utilities (not part of pipeline)
+│   ├── compare_lemmatizers.py       # Compare old vs new lemmatizer on a sample
+│   ├── compare_llm_labelers.py      # Compare multiple LLMs; train LR+SVM on each set of labels
+│   ├── evaluate_prompt.py           # Evaluate prompt quality against a calibration file
+│   └── make_calibration_sample.py   # Build a sample for manual annotation
 │
 ├── models/                      # Saved .pkl model artefacts (gitignored)
 │   ├── best_cluster_model.pkl
@@ -54,22 +56,84 @@ full_prediction_project/
 │   ├── sentiment_vectorizer.pkl
 │   ├── cluster_label_encoder.pkl
 │   ├── sentiment_label_encoder.pkl
-│   ├── raw_counts_per_date.csv      # Total comments per date (dashboard denominator)
-│   └── training_stats_balanced.txt
+│   └── raw_counts_per_date.csv      # Total comments per date+domain (dashboard denominator)
+│
+├── examples/                    # Minimal real-format data samples
+│   ├── json/
+│   │   ├── comments_sample.json     # {url: [comment, ...]} — 3 posts, 9 comments
+│   │   └── posts_sample.json        # {url: {domain, date, id_group, id_post}}
+│   └── csv/
+│       ├── labeled_sample.csv       # 10 rows: prediction output format
+│       └── raw_counts_sample.csv    # 10 rows: date, domain, total_comments
 │
 └── logs/                        # Runtime logs (gitignored)
 ```
 
 ---
 
-## Ozon Pipeline — Quick Start
+## Input Data Formats
+
+### JSON comments file (`convert` / `build_raw_counts`)
+
+```json
+{
+  "https://vk.com/wall-123_456": ["Comment one.", "Comment two."],
+  "https://vk.com/wall-123_457": ["Another comment."]
+}
+```
+
+See `examples/json/comments_sample.json` for a concrete example.
+
+### JSON posts metadata file (`build_raw_counts` / date enrichment)
+
+```json
+{
+  "https://vk.com/wall-123_456": {
+    "domain": "ozon",
+    "date": 1700000000,
+    "id_group": 123,
+    "id_post": 456
+  }
+}
+```
+
+`date` is a Unix timestamp (integer). `domain` is a free-form platform identifier.
+See `examples/json/posts_sample.json` for a concrete example.
+
+### Analysis-ready CSV (for `train` / `predict` / dashboard)
+
+| Column | Required | Description |
+|--------|----------|-------------|
+| `comment` | yes | Comment text. Aliases: `Комментарий`, `Kommentarij` |
+| `url` | no | Post URL — used to join date and domain from post metadata |
+| `cluster_mode` | for train | Cluster label. Aliases: `predicted_cluster`, `cluster` |
+| `sentiment_mode` | for train | Sentiment label. Aliases: `predicted_sentiment`, `sentiment` |
+| `date` | no | Post date — enables time-series charts in dashboard |
+| `domain` | no | Platform name — enables domain filter in dashboard |
+
+See `examples/csv/labeled_sample.csv` for a concrete example.
+
+### Raw counts CSV (`models/raw_counts_per_date.csv`)
+
+| Column | Description |
+|--------|-------------|
+| `date` | ISO date string |
+| `domain` | Platform name |
+| `total_comments` | Total comments collected that day for that domain |
+
+Used as the denominator for the "Cluster mentions vs. total volume" chart.
+See `examples/csv/raw_counts_sample.csv` for a concrete example.
+
+---
+
+## Quick Start
 
 ```
 data/
   ozon_comments.json   # {url: [comment, ...]}
-  ozon_posts.csv       # url, date, domain  (one row per post)
 models/
-  *.pkl                # pre-trained models
+  *.pkl                # pre-trained model artefacts
+  raw_counts_per_date.csv
 ```
 
 ```bash
@@ -122,22 +186,7 @@ Any OpenAI-compatible endpoint works (DeepSeek, OpenAI, Groq, LiteLLM proxy, etc
 
 ---
 
-## Input Data Format
-
-| Column | Description |
-|--------|-------------|
-| `Комментарий` | Raw comment text (Russian). Aliases: `Kommentarij`, `comment` |
-
-For **training** you also need:
-
-| Column | Description |
-|--------|-------------|
-| `cluster_mode` | Ground-truth cluster label (aliases: `predicted_cluster`, `cluster`) |
-| `sentiment_mode` | Ground-truth sentiment label (aliases: `predicted_sentiment`, `sentiment`) |
-
----
-
-## CLI Reference (`main.py`)
+## CLI Reference
 
 ```
 python main.py <mode> [options]
@@ -145,16 +194,25 @@ python main.py <mode> [options]
 
 ### `convert` — JSON → flat CSV
 
+Accepts either a **single file** or an **entire directory** of JSON files.
+In both cases the filename stem (without `.json`) is written to a `domain` column.
+
 ```bash
+# Single file — domain = "ozon_comments" (stem of the filename)
 python main.py convert \
-    --input_file  data/ozon_comments.json \
-    --output_file data/ozon_flat.csv
+    --input_file  data/raw/ozon_comments.json \
+    --output_file data/flat.csv
+
+# Directory — every .json file becomes a separate domain
+python main.py convert \
+    --input_dir   "path/to/Raw json comments/" \
+    --output_file data/flat.csv
 ```
 
-Input JSON format: `{ "https://url/...": ["comment 1", "comment 2"], ... }`  
-Output CSV columns: `url`, `comment`.
+Input format: `{ "url": ["comment 1", "comment 2"], ... }`  
+Output columns: `url`, `comment`, `domain`.
 
-### `label` — AI-label raw data
+### `label` — Label raw data with an LLM
 
 ```bash
 python main.py label \
@@ -183,25 +241,23 @@ python main.py predict \
 
 Add `--skip_transformer_sentiment` to skip RuBERT inference (faster, ML sentiment only).
 
-### `build_dashboard` — Merge post metadata
+### `build_raw_counts` — Rebuild total comment volume per date+domain
 
 ```bash
-python main.py build_dashboard \
-    --json_posts_folder  data/json_with_posts \
-    --csv_posts_folder   data/csv_with_posts \
-    --final_df_folder    data/final_df \
-    --output_file        output_for_dash.csv
+python main.py build_raw_counts \
+    --posts_dir    "path/to/Json with posts" \
+    --comments_dir "path/to/Raw json comments" \
+    --output_file  models/raw_counts_per_date.csv
 ```
+
+Reads all `.json` files from `--posts_dir` (url → domain+date) and `--comments_dir`
+(url → list of comments), joins them, and aggregates total comment count by date and domain.
 
 ### `dashboard` — Launch Streamlit dashboard
 
 ```bash
 python main.py dashboard --input_file predictions.csv
-```
-
-Or directly:
-
-```bash
+# or directly:
 python -m streamlit run dashboard.py -- --input_file predictions.csv
 ```
 
@@ -209,68 +265,93 @@ python -m streamlit run dashboard.py -- --input_file predictions.csv
 
 ## Dashboard
 
-`dashboard.py` visualises `predictions.csv` interactively.
+`dashboard.py` visualises a predictions CSV interactively.
 
-**Sidebar filters:** sentiment · domain · cluster · date range · full-text search
+**Sidebar filters:** sentiment · domain · cluster · date range · free-text search
 
-**KPIs:** total posts · avg length · positive % · negative % · toxic %
+**KPIs:** total posts · avg comment length · positive % · negative % · toxic %
 
 **Charts:**
 - Sentiment distribution (bar)
 - Sentiment over time (line)
 - Cluster distribution (bar)
-- Cluster mentions vs. total volume — grouped bars per period + total comments on secondary axis (week / month / quarter)
+- Cluster mentions vs. total volume — grouped bars per period + total comments on secondary axis (week / month / quarter). The domain filter also narrows the volume denominator.
 - Sarcasm usage (pie) — shown when a `tags` column is present
 
 **Posts table:** up to 200 filtered rows.
 
-The "Cluster mentions vs. total volume" chart requires `models/raw_counts_per_date.csv`
-(generated automatically by `predict` mode when `--posts_csv` is provided, or separately
-via `make_ozon_date_counts.py`).
-
----
-
-## Output Columns
-
-After `predict`, `predictions.csv` contains:
-
-| Column | Source | Description |
-|--------|--------|-------------|
-| `comment` | input | Raw comment text |
-| `new comment` | preprocessing | Lemmatized, stopword-free text |
-| `clusters` | regex | Regex-matched cluster heuristics |
-| `predicted_cluster` | ML | LinearSVC cluster prediction |
-| `predicted_ml_sentiment` | ML | LinearSVC sentiment prediction |
-| `transformer_sentiment` | RuBERT | `positive` / `neutral` / `negative` |
-| `transformer_sentiment_confidence` | RuBERT | Confidence score 0–1 |
+The "Cluster mentions vs. total volume" chart requires `models/raw_counts_per_date.csv`.
+Generate it once with `python main.py build_raw_counts ...`.
 
 ---
 
 ## Model Performance
 
-Training set: ~104k rows (all minority-cluster rows + 60k sampled `none`).
+Evaluated on a 30% held-out test split (random_state=0) of the combined VK dataset.
 
-### Cluster — LinearSVC
+### Cluster — LinearSVC (macro F1 = 0.578)
 
-| Class | Precision | Recall | F1 |
-|-------|-----------|--------|----|
-| chatbot | 0.57 | 0.56 | 0.57 |
-| delay | 0.70 | 0.73 | 0.71 |
-| none | 0.92 | 0.90 | 0.91 |
-| pricing | 0.37 | 0.43 | 0.40 |
-| recommendations | 0.42 | 0.34 | 0.38 |
-| **macro avg** | **0.59** | **0.57** | **0.58** |
+| Class | Precision | Recall | F1 | Random F1 | Support |
+|-------|-----------|--------|----|-----------|---------|
+| chatbot | 0.648 | 0.699 | 0.673 | 0.033 | 871 |
+| delay | 0.765 | 0.756 | 0.760 | 0.451 | 15 174 |
+| no_cluster | 0.760 | 0.763 | 0.761 | 0.500 | 16 730 |
+| pricing | 0.519 | 0.550 | 0.534 | 0.028 | 1 018 |
+| recommendations | 0.375 | 0.103 | 0.162 | 0.000 | 29 |
+| **macro avg** | **0.613** | **0.574** | **0.578** | **0.202** | — |
 
-### Sentiment — LogisticRegression
+### Sentiment — LinearSVC (macro F1 = 0.695)
 
-| Class | Precision | Recall | F1 |
-|-------|-----------|--------|----|
-| negative | 0.65 | 0.82 | 0.72 |
-| neutral | 0.92 | 0.83 | 0.87 |
-| positive | 0.08 | 0.08 | 0.08 |
-| **macro avg** | **0.55** | **0.57** | **0.56** |
+| Class | Precision | Recall | F1 | Random F1 | Support |
+|-------|-----------|--------|----|-----------|---------|
+| negative | 0.789 | 0.862 | 0.824 | 0.472 | 16 059 |
+| neutral | 0.847 | 0.778 | 0.811 | 0.499 | 16 857 |
+| positive | 0.481 | 0.425 | 0.451 | 0.036 | 906 |
+| **macro avg** | **0.706** | **0.688** | **0.695** | **0.336** | — |
 
-`positive` F1 is low due to extreme class imbalance (~0.4% of rows). RuBERT handles positive sentiment significantly better in practice.
+---
+
+## dev/ Tools Reference
+
+These scripts are **not part of the prediction pipeline** — they support research, calibration, and lemmatizer comparison.
+
+### `compare_lemmatizers.py`
+Compares the old lemmatizer (TweetTokenizer + NLTK stopwords) with the new one (pymorphy3 + stop_words library + LRU cache) on a random sample.
+
+```bash
+python dev/compare_lemmatizers.py
+```
+
+### `compare_llm_labelers.py`
+Labels a sample with one or more LLM models, trains LR + LinearSVC on each set of labels, and compares macro F1. Supports resumable overnight runs via checkpoints.
+
+```bash
+python dev/compare_llm_labelers.py \
+    --input_file  "path/to/ozon_comments.json" \
+    --config      config.json \
+    --models      "deepseek/deepseek-v4-pro" "openai/gpt-4o-mini" \
+    --output_file dev/comparison_results.csv
+```
+
+### `evaluate_prompt.py`
+Runs the current prompt on a manually annotated calibration file and reports per-class precision/recall/F1 for cluster and sentiment, plus a confusion matrix and top-15 errors.
+
+```bash
+python dev/evaluate_prompt.py \
+    --calibration_file dev/calibration_sample.xlsx \
+    --model            deepseek/deepseek-v4-pro
+```
+
+### `make_calibration_sample.py`
+Builds a CSV for manual annotation — stratified across cluster keyword filters to ensure informative coverage.
+
+```bash
+python dev/make_calibration_sample.py \
+    --input_file  "path/to/ozon_comments.json" \
+    --output_file dev/calibration_sample.csv \
+    --n_per_class 20 \
+    --n_none      30
+```
 
 ---
 
@@ -279,16 +360,19 @@ Training set: ~104k rows (all minority-cluster rows + 60k sampled `none`).
 ### `src/data_loader.py`
 | Symbol | Description |
 |--------|-------------|
-| `json_to_csv(input_file, output_file)` | Convert raw JSON comments → flat CSV (url, comment) |
-| `json_posts_folder_to_csv(input_folder, output_folder)` | Batch-convert JSON post metadata → CSV |
+| `json_to_csv(input_file, output_file, domain=None)` | Convert a single JSON file → flat CSV (url, comment[, domain]) |
+| `json_dir_to_csv(input_dir, output_file)` | Convert a directory of JSON files → flat CSV (url, comment, domain) |
+| `enrich_with_post_dates(df, posts_dir)` | Join unix dates from JSON post files onto df by url |
 | `combine_csv_files(folder_path)` | Stack all CSVs in a folder into one DataFrame |
 | `load_dataset(filepath, text_column)` | Load CSV + validate required column exists |
 
 ### `src/preprocessing.py`
 | Symbol | Description |
 |--------|-------------|
-| `preprocess_data(df, text_column)` | Clean → lemmatize → regex cluster |
-| `lemmatize(text)` | LRU-cached pymorphy3 lemmatization |
+| `preprocess_data(df, text_column)` | Clean → lemmatize → regex cluster label |
+| `lemmatize_new(text)` | LRU-cached pymorphy3 lemmatization (default) |
+| `lemmatize_old(text)` | TweetTokenizer + NLTK lemmatization (legacy) |
+| `patterns` | Dict of compiled regex patterns for cluster pre-filtering |
 
 ### `src/ml_models.py`
 | Symbol | Description |
@@ -306,9 +390,3 @@ Training set: ~104k rows (all minority-cluster rows + 60k sampled `none`).
 | Symbol | Description |
 |--------|-------------|
 | `predict_transformer_sentiment(df, ...)` | RuBERT batch inference; auto-detects GPU |
-
-### `src/dataset_builder.py`
-| Symbol | Description |
-|--------|-------------|
-| `build_dashboard_dataset(...)` | End-to-end merge: JSON metadata → CSV → join with comments |
-| `merge_metadata_with_comments(metadata_df, processed_df)` | Inner join on URL |

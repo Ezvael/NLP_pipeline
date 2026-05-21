@@ -4,7 +4,7 @@ ai_labeling.py — LLM-based cluster and sentiment labeling for marketplace comm
 Uses an OpenAI-compatible API (e.g. LiteLLM proxy, DeepSeek, Groq, OpenAI) to
 assign each comment a *cluster* and a *sentiment* label.
 
-Supported clusters:   chatbot | pricing | recommendations | suggest | delay | none
+Supported clusters:   chatbot | pricing | recommendations | delay | none
 Supported sentiments: positive | negative | neutral
 
 Typical usage
@@ -146,7 +146,7 @@ def label_dataset(
     """Label an entire DataFrame with cluster and sentiment predictions.
 
     Each row in *df* gets two new columns:
-    - ``predicted_cluster``   — one of chatbot/pricing/recommendations/suggest/delay/none
+    - ``predicted_cluster``   — one of chatbot/pricing/recommendations/delay/none
     - ``predicted_sentiment`` — one of positive/negative/neutral
 
     Rows that fail (API error, parse error) are marked as ``"error"``.

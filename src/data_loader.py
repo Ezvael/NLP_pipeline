@@ -25,7 +25,8 @@ import pandas as pd
 # JSON → CSV helpers
 # ---------------------------------------------------------------------------
 
-def json_to_csv(input_file: str, output_file: str) -> None:
+def json_to_csv(input_file: str, output_file: str,
+                domain: "str | None" = None) -> None:
     """Convert a single raw JSON comments file to a flat CSV.
 
     The input JSON format is::
@@ -35,11 +36,15 @@ def json_to_csv(input_file: str, output_file: str) -> None:
           ...
         }
 
-    The resulting CSV has two columns: ``url`` and ``comment``.
+    The resulting CSV has columns ``url`` and ``comment``.
+    When *domain* is provided a third column ``domain`` is added with that
+    value for every row.
 
     Args:
         input_file:  Path to the source ``.json`` file.
         output_file: Path where the ``.csv`` file will be written.
+        domain:      Optional domain label written to every row (e.g. the
+                     file stem).  ``None`` omits the column entirely.
     """
     with open(input_file, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -48,14 +53,60 @@ def json_to_csv(input_file: str, output_file: str) -> None:
     if out_dir:
         os.makedirs(out_dir, exist_ok=True)
 
+    header = ["url", "comment"] if domain is None else ["url", "comment", "domain"]
+
     with open(output_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["url", "comment"])
+        writer.writerow(header)
         for url, comments in data.items():
-            for comment in comments:
-                writer.writerow([url, comment])
+            if isinstance(comments, list):
+                for comment in comments:
+                    row = [url, comment] if domain is None else [url, comment, domain]
+                    writer.writerow(row)
 
-    print(f"[data_loader] Saved {output_file} ({sum(len(v) for v in data.values())} rows)")
+    total = sum(len(v) for v in data.values() if isinstance(v, list))
+    print(f"[data_loader] Saved {output_file} ({total} rows)")
+
+
+def json_dir_to_csv(input_dir: str, output_file: str) -> None:
+    """Convert a directory of raw JSON comment files to a single flat CSV.
+
+    Each ``.json`` file maps ``{url: [comment, ...]}``.  The file stem
+    (filename without extension) is stored in the ``domain`` column so rows
+    from different sources can be distinguished.
+
+    Output CSV columns: ``url``, ``comment``, ``domain``.
+
+    Args:
+        input_dir:   Directory containing ``.json`` comment files.
+        output_file: Path where the merged ``.csv`` file will be written.
+    """
+    files = sorted(f for f in os.listdir(input_dir) if f.endswith(".json"))
+    if not files:
+        raise FileNotFoundError(f"No .json files found in '{input_dir}'")
+
+    out_dir = os.path.dirname(output_file)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+
+    total = 0
+    with open(output_file, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(["url", "comment", "domain"])
+        for fname in files:
+            domain = os.path.splitext(fname)[0]
+            with open(os.path.join(input_dir, fname), encoding="utf-8") as jf:
+                data = json.load(jf)
+            n = 0
+            for url, comments in data.items():
+                if isinstance(comments, list):
+                    for comment in comments:
+                        writer.writerow([url, comment, domain])
+                        n += 1
+            total += n
+            print(f"[data_loader]   {fname} ({n} rows, domain='{domain}')")
+
+    print(f"[data_loader] Saved {output_file} ({total} rows from {len(files)} files)")
 
 
 def json_posts_folder_to_csv(input_folder: str, output_folder: str) -> None:
@@ -129,7 +180,7 @@ def combine_csv_files(folder_path: str) -> pd.DataFrame:
 
     frames = [pd.read_csv(os.path.join(folder_path, f)) for f in files]
     combined = pd.concat(frames, ignore_index=True)
-    print(f"[data_loader] Combined {len(files)} CSV files from '{folder_path}' → {len(combined)} rows")
+    print(f"[data_loader] Combined {len(files)} CSV files from '{folder_path}' -> {len(combined)} rows")
     return combined
 
 
@@ -155,3 +206,65 @@ def load_dataset(filepath: str, text_column: str = "comment") -> pd.DataFrame:
         )
     print(f"[data_loader] Loaded '{filepath}' — {len(df)} rows")
     return df
+
+
+def enrich_with_post_dates(df: pd.DataFrame, posts_dir: str) -> pd.DataFrame:
+    """Join post publication dates from a folder of JSON post-metadata files.
+
+    Each JSON file maps URL → ``{domain, id_group, id_post, date}`` where
+    ``date`` is a Unix timestamp (integer).  The function adds a ``date``
+    column (``datetime64[ns]``) to *df* by matching on the ``url`` column.
+    Rows whose URL is not found in the metadata keep ``NaT``.
+
+    Args:
+        df:        DataFrame that must contain a ``url`` column.
+        posts_dir: Directory containing ``.json`` post-metadata files.
+
+    Returns:
+        The same DataFrame with a new ``date`` column added in-place.
+    """
+    import json
+
+    if "url" not in df.columns:
+        raise ValueError("DataFrame must have a 'url' column")
+
+    url_date: dict = {}
+    loaded = 0
+    for fname in os.listdir(posts_dir):
+        if not fname.endswith(".json"):
+            continue
+        with open(os.path.join(posts_dir, fname), encoding="utf-8") as fh:
+            posts = json.load(fh)
+        for url, meta in posts.items():
+            if isinstance(meta, dict) and "date" in meta:
+                url_date[url] = meta["date"]
+        loaded += 1
+
+    print(f"[data_loader] Loaded {loaded} post-metadata files, {len(url_date):,} url-date entries")
+
+    df = df.copy()
+    df["date"] = pd.to_datetime(
+        df["url"].map(url_date), unit="s", errors="coerce"
+    )
+    matched = df["date"].notna().sum()
+    print(f"[data_loader] Dates matched: {matched:,} / {len(df):,} rows")
+    return df
+
+
+if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) < 3:
+        print("Usage: python -m src.data_loader <predictions_csv> <posts_dir>")
+        sys.exit(1)
+
+    _csv_path   = sys.argv[1]
+    _posts_dir  = sys.argv[2]
+
+    _df = pd.read_csv(_csv_path, encoding="utf-8-sig")
+    print(f"[data_loader] Loaded {_csv_path!r} — {len(_df):,} rows")
+
+    _df = enrich_with_post_dates(_df, _posts_dir)
+
+    _df.to_csv(_csv_path, index=False, encoding="utf-8-sig")
+    print(f"[data_loader] Saved enriched file: {_csv_path!r}")

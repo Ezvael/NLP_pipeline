@@ -25,6 +25,17 @@ models/*.pkl
 data/
 *.csv
 !data/.gitkeep
+# Keep example data files
+!examples/**
+
+# Removed models_vk/ (merged into models/)
+models_vk/
+
+# Logs from overnight runs
+logs/
+
+# LLM comparison checkpoints
+**/llm_comparison_checkpoints/
 
 # IDE
 .idea/

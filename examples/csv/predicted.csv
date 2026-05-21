@@ -1,0 +1,10 @@
+﻿url,comment,domain,clusters,new comment,predicted_cluster_encoded,predicted_cluster,predicted_ml_sentiment_encoded,predicted_ml_sentiment,tags,transformer_sentiment,transformer_sentiment_confidence
+https://vk.com/wall-123456789_1001,"Курьер не приехал, хотя трек показывал «в пути». Перенесли уже третий раз подряд!",comments_sample,['delay'],"курьер приехал, трек показывать пути». перенести подряд!",1,delay,0,negative,[],negative,0.7429
+https://vk.com/wall-123456789_1001,Как отследить заказ? Трек-номер не обновляется уже два дня.,comments_sample,['delay'],отследить заказ? трек-номер обновляться дня.,1,delay,1,neutral,[],negative,0.8153
+https://vk.com/wall-123456789_1001,"Наконец-то доставили. Спасибо, всё в порядке.",comments_sample,[],"наконец-то доставили. спасибо, порядке.",1,delay,2,positive,[],neutral,0.9792
+https://vk.com/wall-123456789_1002,"Утром цена была 1 200 руб., вечером уже 1 800. Это обман покупателей!",comments_sample,['pricing'],"утром цена 200 руб., вечером 800. обман покупателей!",3,pricing,0,negative,[],positive,0.7515
+https://vk.com/wall-123456789_1002,"Добавил в корзину за 990, при оформлении стало 1 350. Почему так?",comments_sample,[],"добавить корзина 990, оформление стать 350. так?",3,pricing,0,negative,[],negative,0.8188
+https://vk.com/wall-123456789_1002,"Цены нормальные, купил без проблем.",comments_sample,[],"цена нормальные, купить проблем.",3,pricing,2,positive,[],neutral,0.9247
+https://vk.com/wall-123456789_1003,"Бот поддержки не отвечает, застрял в цикле перенаправлений. Как выйти на живого оператора?",comments_sample,['chatbot'],"бот поддержка отвечает, застрять цикл перенаправлений. выйти живой оператора?",0,chatbot,0,negative,[],negative,0.8214
+https://vk.com/wall-123456789_1003,"Написал в чат-бот — перенаправил на другой раздел, там снова бот. Помогите!",comments_sample,['chatbot'],"написать чат-бот перенаправить раздел, бот. помогите!",0,chatbot,0,negative,[],negative,0.8204
+https://vk.com/wall-123456789_1003,"Оператор ответил быстро, вопрос решён.",comments_sample,[],"оператор ответить быстро, вопрос решён.",0,chatbot,0,negative,[],negative,0.8181

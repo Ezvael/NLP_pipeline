@@ -1,0 +1,20 @@
+{
+  "https://vk.com/wall-123456789_1001": {
+    "domain": "ozon",
+    "date": 1700000000,
+    "id_group": 123456789,
+    "id_post": 1001
+  },
+  "https://vk.com/wall-123456789_1002": {
+    "domain": "wildberries",
+    "date": 1700086400,
+    "id_group": 123456789,
+    "id_post": 1002
+  },
+  "https://vk.com/wall-123456789_1003": {
+    "domain": "ozon",
+    "date": 1700172800,
+    "id_group": 123456789,
+    "id_post": 1003
+  }
+}

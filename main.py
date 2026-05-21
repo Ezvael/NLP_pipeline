@@ -226,11 +226,19 @@ def run_predict(args):
 # ---------------------------------------------------------------------------
 
 def run_convert(args):
-    """Convert a raw JSON comments file to a flat CSV (url, comment)."""
-    from src.data_loader import json_to_csv
-
-    os.makedirs(os.path.dirname(args.output_file) or ".", exist_ok=True)
-    json_to_csv(args.input_file, args.output_file)
+    """Convert JSON comment file(s) to a flat CSV (url, comment, domain)."""
+    if getattr(args, "input_dir", None):
+        from src.data_loader import json_dir_to_csv
+        os.makedirs(os.path.dirname(args.output_file) or ".", exist_ok=True)
+        json_dir_to_csv(args.input_dir, args.output_file)
+    elif getattr(args, "input_file", None):
+        from src.data_loader import json_to_csv
+        domain = os.path.splitext(os.path.basename(args.input_file))[0]
+        os.makedirs(os.path.dirname(args.output_file) or ".", exist_ok=True)
+        json_to_csv(args.input_file, args.output_file, domain=domain)
+    else:
+        print("Error: provide either --input_file or --input_dir.")
+        sys.exit(1)
 
 
 # ---------------------------------------------------------------------------
@@ -248,19 +256,67 @@ def run_dashboard(args):
 
 
 # ---------------------------------------------------------------------------
-# Mode: build_dashboard
+# Mode: build_raw_counts
 # ---------------------------------------------------------------------------
 
-def run_build_dashboard(args):
-    """Merge post metadata with labelled comments into a dashboard-ready CSV."""
-    from src.dataset_builder import build_dashboard_dataset
+def run_build_raw_counts(args):
+    """Rebuild models/raw_counts_per_date.csv with date, domain, total_comments."""
+    import json as _json
 
-    build_dashboard_dataset(
-        json_posts_folder=args.json_posts_folder,
-        csv_posts_folder=args.csv_posts_folder,
-        final_df_folder=args.final_df_folder,
-        output_path=args.output_file,
+    posts_dir    = args.posts_dir
+    comments_dir = args.comments_dir
+    out_file     = args.output_file
+
+    # url -> {domain, date}
+    print("Loading post metadata...")
+    url_meta: dict = {}
+    for fname in os.listdir(posts_dir):
+        if not fname.endswith(".json"):
+            continue
+        with open(os.path.join(posts_dir, fname), encoding="utf-8") as fh:
+            posts = _json.load(fh)
+        for url, meta in posts.items():
+            if isinstance(meta, dict) and "date" in meta and "domain" in meta:
+                url_meta[url] = {"domain": meta["domain"], "date": meta["date"]}
+    print(f"  {len(url_meta):,} posts with domain+date")
+
+    # url -> comment count
+    print("Loading raw comment counts...")
+    url_counts: dict = {}
+    for fname in os.listdir(comments_dir):
+        if not fname.endswith(".json"):
+            continue
+        with open(os.path.join(comments_dir, fname), encoding="utf-8") as fh:
+            data = _json.load(fh)
+        for url, comments in data.items():
+            if isinstance(comments, list):
+                url_counts[url] = url_counts.get(url, 0) + len(comments)
+    print(f"  {len(url_counts):,} posts with comment counts")
+
+    # Join and aggregate by (date, domain)
+    rows = []
+    for url, cnt in url_counts.items():
+        meta = url_meta.get(url)
+        if meta:
+            rows.append({"domain": meta["domain"], "unix_date": meta["date"], "n": cnt})
+
+    df = pd.DataFrame(rows)
+    df["date"] = pd.to_datetime(df["unix_date"], unit="s", errors="coerce").dt.normalize()
+    df = df.dropna(subset=["date"])
+    df["domain"] = df["domain"].replace({"wildberries_shop": "wildberries"})
+
+    result = (
+        df.groupby(["date", "domain"])["n"]
+        .sum()
+        .reset_index(name="total_comments")
+        .sort_values(["date", "domain"])
     )
+
+    os.makedirs(os.path.dirname(out_file) or ".", exist_ok=True)
+    result.to_csv(out_file, index=False)
+    print(f"Saved {len(result):,} rows -> {out_file}")
+    print(f"Domains: {sorted(result['domain'].unique())}")
+    print(f"Date range: {result['date'].min().date()} .. {result['date'].max().date()}")
 
 
 # ---------------------------------------------------------------------------
@@ -276,12 +332,25 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="mode", required=True)
 
     # ── convert ────────────────────────────────────────────────────────────
-    p_conv = sub.add_parser("convert",
-                            help="Convert a raw JSON comments file to a flat CSV (url, comment).")
-    p_conv.add_argument("--input_file",  required=True,
-                        help="Path to source .json file ({url: [comment, ...]} format).")
-    p_conv.add_argument("--output_file", default="data/ozon_flat.csv",
-                        help="Where to save the flat CSV (default: data/ozon_flat.csv).")
+    p_conv = sub.add_parser(
+        "convert",
+        help="Convert JSON comment file(s) to a flat CSV (url, comment, domain).",
+    )
+    src_group = p_conv.add_mutually_exclusive_group(required=True)
+    src_group.add_argument(
+        "--input_file",
+        help="Single .json file ({url: [comment, ...]} format). "
+             "Filename stem is written to the 'domain' column.",
+    )
+    src_group.add_argument(
+        "--input_dir",
+        help="Directory of .json files — each file is converted and its "
+             "filename stem is used as the 'domain' column value.",
+    )
+    p_conv.add_argument(
+        "--output_file", default="data/flat.csv",
+        help="Where to save the merged CSV (default: data/flat.csv).",
+    )
 
     # ── label ──────────────────────────────────────────────────────────────
     p_label = sub.add_parser("label", help="Label a raw CSV with cluster + sentiment via LLM.")
@@ -316,17 +385,15 @@ def build_parser() -> argparse.ArgumentParser:
                              "When provided, enriches predictions with date/domain and "
                              "saves models/raw_counts_per_date.csv for the dashboard.")
 
-    # ── build_dashboard ────────────────────────────────────────────────────
-    p_dash = sub.add_parser("build_dashboard",
-                            help="Merge post metadata with labelled comments for a dashboard.")
-    p_dash.add_argument("--json_posts_folder", required=True,
-                        help="Folder with JSON post-metadata files.")
-    p_dash.add_argument("--csv_posts_folder", required=True,
-                        help="Folder where converted CSV metadata files will be stored.")
-    p_dash.add_argument("--final_df_folder", required=True,
-                        help="Folder with processed/labelled comment CSVs.")
-    p_dash.add_argument("--output_file", default="output_for_dash.csv",
-                        help="Output path for the merged dashboard CSV.")
+    # ── build_raw_counts ───────────────────────────────────────────────────
+    p_rc = sub.add_parser("build_raw_counts",
+                           help="Rebuild raw comment counts per date+domain from JSON sources.")
+    p_rc.add_argument("--posts_dir", required=True,
+                      help="Folder with 'Json with posts' .json files ({url: {domain, date, ...}}).")
+    p_rc.add_argument("--comments_dir", required=True,
+                      help="Folder with raw comment .json files ({url: [comment, ...]}).")
+    p_rc.add_argument("--output_file", default=os.path.join("models", "raw_counts_per_date.csv"),
+                      help="Output CSV path (default: models/raw_counts_per_date.csv).")
 
     # ── dashboard ──────────────────────────────────────────────────────────
     p_db = sub.add_parser("dashboard", help="Launch the Streamlit analytics dashboard.")
@@ -345,11 +412,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     dispatch = {
-        "convert":         run_convert,
-        "label":           run_label,
-        "train":           run_train,
-        "predict":         run_predict,
-        "build_dashboard": run_build_dashboard,
-        "dashboard":       run_dashboard,
+        "convert":          run_convert,
+        "label":            run_label,
+        "train":            run_train,
+        "predict":          run_predict,
+        "build_raw_counts": run_build_raw_counts,
+        "dashboard":        run_dashboard,
     }
     dispatch[args.mode](args)
