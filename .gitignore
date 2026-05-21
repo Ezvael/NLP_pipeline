@@ -18,15 +18,14 @@ env/
 # Jupyter checkpoints
 .ipynb_checkpoints/
 
-# Trained model artefacts (large binary files)
-models/*.pkl
-
 # Data files (often large or sensitive)
 data/
 *.csv
 !data/.gitkeep
 # Keep example data files
 !examples/**
+# Keep model artefacts
+!models/**
 
 # Removed models_vk/ (merged into models/)
 models_vk/
