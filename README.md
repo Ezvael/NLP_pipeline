@@ -261,6 +261,15 @@ python main.py dashboard --input_file predictions.csv
 python -m streamlit run dashboard.py -- --input_file predictions.csv
 ```
 
+By default the dashboard looks for `models/raw_counts_per_date.csv` (already present in the
+repository). To point it at a different file use `--raw_counts`:
+
+```bash
+python main.py dashboard \
+    --input_file predictions.csv \
+    --raw_counts path/to/other_raw_counts.csv
+```
+
 ---
 
 ## Dashboard
@@ -280,8 +289,23 @@ python -m streamlit run dashboard.py -- --input_file predictions.csv
 
 **Posts table:** up to 200 filtered rows.
 
+### Raw counts file
+
 The "Cluster mentions vs. total volume" chart requires `models/raw_counts_per_date.csv`.
-Generate it once with `python main.py build_raw_counts ...`.
+This file is included in the repository (pre-built from the training dataset).
+
+To rebuild it from your own data:
+
+```bash
+python main.py build_raw_counts \
+    --posts_dir    "path/to/Json with posts" \
+    --comments_dir "path/to/Raw json comments" \
+    --output_file  models/raw_counts_per_date.csv
+```
+
+It reads all `.json` files from `--posts_dir` (url → domain + Unix timestamp) and
+`--comments_dir` (url → list of comments), joins them by URL, and aggregates the total
+comment count by date and domain. The result is used as the denominator in the volume chart.
 
 ---
 
