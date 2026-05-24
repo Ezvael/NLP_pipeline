@@ -113,7 +113,7 @@ See `examples/json/posts_sample.json` for a concrete example.
 
 See `examples/csv/labeled_sample.csv` for a concrete example.
 
-### Raw counts CSV (`models/raw_counts_per_date.csv`)
+### Raw counts CSV (`data/raw_counts_per_date.csv`)
 
 | Column | Description |
 |--------|-------------|
@@ -130,10 +130,10 @@ See `examples/csv/raw_counts_sample.csv` for a concrete example.
 
 ```
 data/
-  ozon_comments.json   # {url: [comment, ...]}
+  ozon_comments.json        # {url: [comment, ...]}
+  raw_counts_per_date.csv   # pre-built total comment volume per date+domain
 models/
-  *.pkl                # pre-trained model artefacts
-  raw_counts_per_date.csv
+  *.pkl                     # pre-trained model artefacts
 ```
 
 ```bash
@@ -247,11 +247,21 @@ Add `--skip_transformer_sentiment` to skip RuBERT inference (faster, ML sentimen
 python main.py build_raw_counts \
     --posts_dir    "path/to/Json with posts" \
     --comments_dir "path/to/Raw json comments" \
-    --output_file  models/raw_counts_per_date.csv
+    --output_file  data/raw_counts_per_date.csv
 ```
 
 Reads all `.json` files from `--posts_dir` (url → domain+date) and `--comments_dir`
 (url → list of comments), joins them, and aggregates total comment count by date and domain.
+
+Optionally enriches an existing predictions CSV with `date` and `domain` columns:
+
+```bash
+python main.py build_raw_counts \
+    --posts_dir        "path/to/Json with posts" \
+    --comments_dir     "path/to/Raw json comments" \
+    --output_file      data/raw_counts_per_date.csv \
+    --predictions_file data/predicted_sample.csv
+```
 
 ### `dashboard` — Launch Streamlit dashboard
 
@@ -259,9 +269,11 @@ Reads all `.json` files from `--posts_dir` (url → domain+date) and `--comments
 python main.py dashboard --input_file predictions.csv
 # or directly:
 python -m streamlit run dashboard.py -- --input_file predictions.csv
+# or via the one-click launcher (uses data/predicted_sample.csv + data/raw_counts_per_date.csv):
+python run_dashboard.py
 ```
 
-By default the dashboard looks for `models/raw_counts_per_date.csv` (already present in the
+By default the dashboard looks for `data/raw_counts_per_date.csv` (already present in the
 repository). To point it at a different file use `--raw_counts`:
 
 ```bash
@@ -285,13 +297,12 @@ python main.py dashboard \
 - Sentiment over time (line)
 - Cluster distribution (bar)
 - Cluster mentions vs. total volume — grouped bars per period + total comments on secondary axis (week / month / quarter). The domain filter also narrows the volume denominator.
-- Sarcasm usage (pie) — shown when a `tags` column is present
 
 **Posts table:** up to 200 filtered rows.
 
 ### Raw counts file
 
-The "Cluster mentions vs. total volume" chart requires `models/raw_counts_per_date.csv`.
+The "Cluster mentions vs. total volume" chart requires `data/raw_counts_per_date.csv`.
 This file is included in the repository (pre-built from the training dataset).
 
 To rebuild it from your own data:
@@ -300,7 +311,7 @@ To rebuild it from your own data:
 python main.py build_raw_counts \
     --posts_dir    "path/to/Json with posts" \
     --comments_dir "path/to/Raw json comments" \
-    --output_file  models/raw_counts_per_date.csv
+    --output_file  data/raw_counts_per_date.csv
 ```
 
 It reads all `.json` files from `--posts_dir` (url → domain + Unix timestamp) and

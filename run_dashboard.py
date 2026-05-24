@@ -18,7 +18,7 @@ import sys
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 INPUT_FILE = os.path.join(BASE_DIR, "data", "predicted_sample.csv")
-RAW_COUNTS = os.path.join(BASE_DIR, "models", "raw_counts_per_date.csv")
+RAW_COUNTS = os.path.join(BASE_DIR, "data", "raw_counts_per_date.csv")
 DASHBOARD  = os.path.join(BASE_DIR, "dashboard.py")
 
 # ---------------------------------------------------------------------------

@@ -13,8 +13,8 @@ def parse_args():
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--input_file", default="predictions.csv")
     parser.add_argument("--raw_counts",
-                        default=os.path.join("models", "raw_counts_per_date.csv"),
-                        help="CSV with columns: date, total_comments (pre-regex raw counts)")
+                        default=os.path.join("data", "raw_counts_per_date.csv"),
+                        help="CSV with columns: date, domain, total_comments (raw counts)")
     args, _ = parser.parse_known_args()
     return args
 
@@ -286,23 +286,6 @@ if (
         st.plotly_chart(fig_overlay, width="stretch")
     else:
         st.info("Not enough data to build the chart.")
-
-# Sarcasm chart (only when tags column is present)
-if "tags" in filtered.columns:
-    st.subheader("Sarcasm usage")
-    sarcasm_df = pd.DataFrame({
-        "type":  ["sarcastic", "non-sarcastic"],
-        "count": [
-            filtered["tags"].apply(
-                lambda x: "TAG_SARCASM" in (x if isinstance(x, list) else [])
-            ).sum(),
-            filtered["tags"].apply(
-                lambda x: "TAG_SARCASM" not in (x if isinstance(x, list) else [])
-            ).sum(),
-        ],
-    })
-    fig = px.pie(sarcasm_df, names="type", values="count")
-    st.plotly_chart(fig, width="stretch")
 
 # Posts table
 st.subheader("Posts")

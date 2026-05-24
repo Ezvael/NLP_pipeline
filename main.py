@@ -248,11 +248,12 @@ def run_convert(args):
 def run_dashboard(args):
     """Launch the Streamlit analytics dashboard."""
     import subprocess
-    subprocess.run(
-        [sys.executable, "-m", "streamlit", "run", "dashboard.py",
-         "--", "--input_file", args.input_file],
-        check=True,
-    )
+    cmd = [
+        sys.executable, "-m", "streamlit", "run", "dashboard.py",
+        "--", "--input_file", args.input_file,
+        "--raw_counts", args.raw_counts,
+    ]
+    subprocess.run(cmd, check=True)
 
 
 # ---------------------------------------------------------------------------
@@ -260,7 +261,11 @@ def run_dashboard(args):
 # ---------------------------------------------------------------------------
 
 def run_build_raw_counts(args):
-    """Rebuild models/raw_counts_per_date.csv with date, domain, total_comments."""
+    """Rebuild data/raw_counts_per_date.csv with date, domain, total_comments.
+
+    Optionally enriches a predictions CSV (--predictions_file) with date and
+    domain columns derived from the same post-metadata JSON files.
+    """
     import json as _json
 
     posts_dir    = args.posts_dir
@@ -317,6 +322,27 @@ def run_build_raw_counts(args):
     print(f"Saved {len(result):,} rows -> {out_file}")
     print(f"Domains: {sorted(result['domain'].unique())}")
     print(f"Date range: {result['date'].min().date()} .. {result['date'].max().date()}")
+
+    # ── Optional: enrich predictions CSV with date + domain ─────────────────
+    if getattr(args, "predictions_file", None):
+        pred_path = args.predictions_file
+        print(f"\nEnriching '{pred_path}' with date and domain...")
+        pred_df = pd.read_csv(pred_path)
+
+        url_dates  = {u: m["date"]   for u, m in url_meta.items()}
+        url_domain = {u: m["domain"] for u, m in url_meta.items()}
+
+        pred_df["date"] = pd.to_datetime(
+            pred_df["url"].map(url_dates), unit="s", errors="coerce"
+        )
+        # Only overwrite domain if column is missing or all-null
+        if "domain" not in pred_df.columns or pred_df["domain"].isna().all():
+            pred_df["domain"] = pred_df["url"].map(url_domain)
+
+        matched = pred_df["date"].notna().sum()
+        print(f"  date matched: {matched:,} / {len(pred_df):,} rows")
+        pred_df.to_csv(pred_path, index=False)
+        print(f"  Saved enriched predictions -> {pred_path}")
 
 
 # ---------------------------------------------------------------------------
@@ -392,13 +418,20 @@ def build_parser() -> argparse.ArgumentParser:
                       help="Folder with 'Json with posts' .json files ({url: {domain, date, ...}}).")
     p_rc.add_argument("--comments_dir", required=True,
                       help="Folder with raw comment .json files ({url: [comment, ...]}).")
-    p_rc.add_argument("--output_file", default=os.path.join("models", "raw_counts_per_date.csv"),
-                      help="Output CSV path (default: models/raw_counts_per_date.csv).")
+    p_rc.add_argument("--output_file", default=os.path.join("data", "raw_counts_per_date.csv"),
+                      help="Output CSV path (default: data/raw_counts_per_date.csv).")
+    p_rc.add_argument("--predictions_file", default=None,
+                      help="Optional predictions CSV to enrich with date and domain columns "
+                           "using the same post-metadata JSON files.")
 
     # ── dashboard ──────────────────────────────────────────────────────────
     p_db = sub.add_parser("dashboard", help="Launch the Streamlit analytics dashboard.")
     p_db.add_argument("--input_file", default="predictions.csv",
                       help="Predictions CSV to visualise (default: predictions.csv).")
+    p_db.add_argument("--raw_counts",
+                      default=os.path.join("data", "raw_counts_per_date.csv"),
+                      help="CSV with date, domain, total_comments for volume chart "
+                           "(default: data/raw_counts_per_date.csv).")
 
     return parser
 

@@ -23,6 +23,7 @@ data/*
 *.csv
 !data/.gitkeep
 !data/predicted_sample.csv
+!data/raw_counts_per_date.csv
 # Keep example data files
 !examples/**
 # Keep model artefacts
