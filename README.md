@@ -425,3 +425,5 @@ python dev/make_calibration_sample.py \
 | Symbol | Description |
 |--------|-------------|
 | `predict_transformer_sentiment(df, ...)` | RuBERT batch inference; auto-detects GPU |
+
+*The dashboard is available via the link https://nlppipeline-xdryttyqoagjxmkwpnhbwl.streamlit.app/*
