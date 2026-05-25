@@ -5,15 +5,16 @@ import sys
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 st.set_page_config(page_title="NLP Analytics Dashboard", layout="wide")
 
 
 def parse_args():
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--input_file", default="predictions.csv")
+    parser.add_argument("--input_file", default=os.path.join(BASE_DIR, "data", "predicted_sample.csv"))
     parser.add_argument("--raw_counts",
-                        default=os.path.join("data", "raw_counts_per_date.csv"),
+                        default=os.path.join(BASE_DIR, "data", "raw_counts_per_date.csv"),
                         help="CSV with columns: date, domain, total_comments (raw counts)")
     args, _ = parser.parse_known_args()
     return args
@@ -53,14 +54,15 @@ def load_data(path: str):
                 df["predicted_cluster"] = df[fallback]
                 break
 
+    if "comment" not in df.columns:
+        st.error("No comment column found in dataset.")
+        st.stop()
+        
     df["text_length"] = df["comment"].astype(str).str.len()
 
     # Enrich with post dates + domain from ozon_comments.csv when input has Ссылка but no date
     if "date" not in df.columns and "Ссылка" in df.columns:
-        _url_date_path = (
-            r"C:\Users\Deniz\PycharmProjects\pythonProject\Analyse comments"
-            r"\Datasets processing\Csv with posts\ozon_comments.csv"
-        )
+        _url_date_path = os.path.join(BASE_DIR, "data", "ozon_comments.csv")
         if os.path.exists(_url_date_path):
             _ud = pd.read_csv(_url_date_path, usecols=["url", "date", "domain"])
             df = df.merge(_ud.rename(columns={"url": "Ссылка"}), on="Ссылка", how="left")
