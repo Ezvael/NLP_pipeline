@@ -286,6 +286,8 @@ python main.py dashboard \
 
 ## Dashboard
 
+*The dashboard is available via the link https://nlppipeline-xdryttyqoagjxmkwpnhbwl.streamlit.app/*
+
 `dashboard.py` visualises a predictions CSV interactively.
 
 **Sidebar filters:** sentiment · domain · cluster · date range · free-text search
@@ -425,5 +427,3 @@ python dev/make_calibration_sample.py \
 | Symbol | Description |
 |--------|-------------|
 | `predict_transformer_sentiment(df, ...)` | RuBERT batch inference; auto-detects GPU |
-
-*The dashboard is available via the link https://nlppipeline-xdryttyqoagjxmkwpnhbwl.streamlit.app/*
