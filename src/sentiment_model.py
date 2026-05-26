@@ -48,7 +48,8 @@ def predict_transformer_sentiment(df, text_column='comment', tags_column='tags')
     confidences = []
     tags_list = df_copy[tags_column].tolist()
 
-    for i, (neg, neu, pos) in enumerate(probs):
+    # blanchefort/rubert-base-cased-sentiment label order: {0: NEUTRAL, 1: POSITIVE, 2: NEGATIVE}
+    for i, (neu, pos, neg) in enumerate(probs):
         tags = tags_list[i]
 
         tag_pos = sum(t in BOOST_POS for t in tags)
