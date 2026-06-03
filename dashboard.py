@@ -158,13 +158,6 @@ pos_pct = (filtered["transformer_sentiment"] == "positive").mean()
 neg_pct = (filtered["transformer_sentiment"] == "negative").mean()
 col3.metric("Positive %", f"{pos_pct:.1%}")
 col4.metric("Negative %", f"{neg_pct:.1%}")
-if "tags" in filtered.columns and len(filtered):
-    tox_pct = filtered["tags"].apply(
-        lambda x: "TAG_PROFANITY" in (x if isinstance(x, list) else [])
-    ).mean()
-    col5.metric("Toxic %", f"{tox_pct:.1%}")
-else:
-    col5.metric("Toxic %", "N/A")
 
 # Charts row 1
 colA, colB = st.columns(2)
