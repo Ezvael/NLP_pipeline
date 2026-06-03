@@ -151,7 +151,7 @@ st.title("NLP Analytics Dashboard")
 st.caption(f"Source: `{input_file}` — {len(filtered):,} posts shown")
 
 # KPIs
-col1, col2, col3, col4, col5 = st.columns(5)
+col1, col2, col3, col4 = st.columns(4)
 col1.metric("Posts", f"{len(filtered):,}")
 col2.metric("Avg Length", int(filtered["text_length"].mean()) if len(filtered) else 0)
 pos_pct = (filtered["transformer_sentiment"] == "positive").mean()
