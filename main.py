@@ -48,6 +48,9 @@ import sys
 import pandas as pd
 
 from src.preprocessing import preprocess_data
+
+# Absolute path to the project root (same dir as this file)
+_HERE = os.path.dirname(os.path.abspath(__file__))
 from src.ml_models import train_and_evaluate_ml_models, evaluate_final_models
 from src.predict import predict_on_new_data, load_model_artifacts
 
@@ -103,6 +106,7 @@ def run_label(args):
         model=cfg["model"],
         text_column="comment",
         batch_size=args.batch_size,
+        lang=getattr(args, "lang", "ru"),
     )
 
     os.makedirs(os.path.dirname(args.output_file) or ".", exist_ok=True)
@@ -248,8 +252,10 @@ def run_convert(args):
 def run_dashboard(args):
     """Launch the Streamlit analytics dashboard."""
     import subprocess
+    base = os.path.dirname(os.path.abspath(__file__))
+    dashboard_path = os.path.join(base, "dashboard.py")
     cmd = [
-        sys.executable, "-m", "streamlit", "run", "dashboard.py",
+        sys.executable, "-m", "streamlit", "run", dashboard_path,
         "--", "--input_file", args.input_file,
         "--raw_counts", args.raw_counts,
     ]
@@ -388,6 +394,8 @@ def build_parser() -> argparse.ArgumentParser:
                          help="Path to config.json with api_key, base_url, model.")
     p_label.add_argument("--batch_size", type=int, default=80,
                          help="Number of comments per LLM API call (default: 80).")
+    p_label.add_argument("--lang", default="ru", choices=["ru", "en"],
+                         help="Language for LLM prompt: 'ru' (default) or 'en'.")
 
     # ── train ──────────────────────────────────────────────────────────────
     p_train = sub.add_parser("train", help="Train ML models on labelled data.")
@@ -426,12 +434,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     # ── dashboard ──────────────────────────────────────────────────────────
     p_db = sub.add_parser("dashboard", help="Launch the Streamlit analytics dashboard.")
-    p_db.add_argument("--input_file", default="predictions.csv",
-                      help="Predictions CSV to visualise (default: predictions.csv).")
+    p_db.add_argument("--input_file",
+                      default=os.path.join(_HERE, "data", "all_predictions.csv"),
+                      help="Predictions CSV to visualise (default: data/all_predictions.csv).")
     p_db.add_argument("--raw_counts",
-                      default=os.path.join("data", "raw_counts_per_date.csv"),
+                      default=os.path.join(_HERE, "data", "all_raw_counts.csv"),
                       help="CSV with date, domain, total_comments for volume chart "
-                           "(default: data/raw_counts_per_date.csv).")
+                           "(default: data/all_raw_counts.csv).")
 
     return parser
 

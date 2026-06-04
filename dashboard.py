@@ -108,6 +108,11 @@ sentiments = st.sidebar.multiselect(
     default=sorted(df["transformer_sentiment"].dropna().unique()),
 )
 
+selected_sources = []
+if "source" in df.columns:
+    sources = sorted(df["source"].dropna().unique())
+    selected_sources = st.sidebar.multiselect("Source", sources)
+
 selected_domains = []
 if "domain" in df.columns:
     domains = sorted(df["domain"].dropna().unique())
@@ -128,6 +133,9 @@ query = st.sidebar.text_input("Search text")
 
 # Filter
 filtered = df[df["transformer_sentiment"].isin(sentiments)]
+
+if selected_sources:
+    filtered = filtered[filtered["source"].isin(selected_sources)]
 
 if selected_domains:
     filtered = filtered[filtered["domain"].isin(selected_domains)]
@@ -243,9 +251,18 @@ if (
     )
 
     # Raw totals aggregated to same period.
-    # df_raw_counts now has columns: date, domain, total_comments.
-    # Apply domain filter when active; otherwise sum across all domains.
+    # df_raw_counts columns: date, domain, total_comments.
+    # Apply source filter first (maps source → domains), then domain filter.
+    SOURCE_DOMAIN_MAP = {
+        "reddit": {"amazon", "amazonprime"},
+        "vk":     {"ozon", "aliexpress", "megamrkt", "yandex.market", "wildberries"},
+    }
     rc_src = df_raw_counts.copy()
+    if selected_sources and "domain" in rc_src.columns:
+        allowed = set()
+        for s in selected_sources:
+            allowed |= SOURCE_DOMAIN_MAP.get(s, set())
+        rc_src = rc_src[rc_src["domain"].isin(allowed)]
     if selected_domains and "domain" in rc_src.columns:
         rc_src = rc_src[rc_src["domain"].isin(selected_domains)]
     rc_src["period"] = rc_src["date"].dt.to_period(freq).dt.to_timestamp()

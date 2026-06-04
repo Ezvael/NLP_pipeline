@@ -102,6 +102,63 @@ _PROMPT_TEMPLATE = """\
 {comments}
 """
 
+_PROMPT_TEMPLATE_EN = """\
+You are analyzing customer comments about online marketplaces and e-commerce platforms.
+
+For EACH message determine the cluster and sentiment.
+
+━━━ CLUSTERS ━━━
+- chatbot        — the message is about the SUPPORT BOT itself (automated/AI agent, chatbot, \
+virtual assistant, canned auto-reply). The bot specifically must be the subject. \
+NOT: complaints about a human operator, NOT general "support is bad" without mention of a bot.
+- pricing        — the price of the SAME item changed within a short period \
+(e.g. different price this morning vs now, price went up/down between visits, fluctuating). \
+NOT: unauthorized charges, double charges, refunds, billing disputes, or general "expensive".
+- recommendations — the message is about the RECOMMENDATION / SUGGESTION algorithm \
+(the "for you" picks, suggested products, personalization). Can be NEGATIVE \
+(irrelevant items, bad picks, suggesting already-bought products) OR POSITIVE \
+(loving the suggestions, picks are spot on). NOT: general product quality complaints.
+- delay          — user complains about a SPECIFIC order/package that is late, \
+tracking not updating, courier didn't arrive, item still not delivered. \
+NOT: general dissatisfaction where delivery is a side mention.
+- none           — none of the above clusters apply (general complaint, question, praise, etc.)
+
+━━━ SENTIMENT ━━━
+- positive — satisfied, grateful, praising
+- negative — dissatisfied, frustrated, complaining
+- neutral  — neutral question, information request, ambiguous
+
+━━━ RULES ━━━
+- Use ONLY values from the lists above — no variations
+- If unsure between two clusters — pick the more specific one
+- Return ONLY a JSON array, no explanations, no markdown fences
+
+━━━ EXAMPLES ━━━
+[
+  {{"id":1,"cluster":"chatbot","sentiment":"negative"}},
+  {{"id":2,"cluster":"delay","sentiment":"negative"}},
+  {{"id":3,"cluster":"pricing","sentiment":"negative"}},
+  {{"id":4,"cluster":"recommendations","sentiment":"negative"}},
+  {{"id":5,"cluster":"recommendations","sentiment":"positive"}},
+  {{"id":6,"cluster":"none","sentiment":"negative"}},
+  {{"id":7,"cluster":"none","sentiment":"positive"}},
+  {{"id":8,"cluster":"delay","sentiment":"neutral"}}
+]
+
+// Example context:
+// 1 → "Your chatbot keeps sending the same canned auto-reply. Useless bot."
+// 2 → "My package hasn't arrived. Tracking says delivered but it's not here."
+// 3 → "Same item was $29 this morning, now it's $45 a few hours later."
+// 4 → "Your recommendations keep suggesting stuff I already bought. The algorithm is terrible."
+// 5 → "Honestly your recommendations are spot on lately — I love everything you suggest!"
+// 6 → "Received a completely broken item. Terrible quality."
+// 7 → "Order arrived a day early, perfectly packed. Very happy!"
+// 8 → "Can you update me on order #123-456? Tracking hasn't moved in 3 days."
+
+━━━ MESSAGES TO LABEL ━━━
+{comments}
+"""
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -111,6 +168,7 @@ def classify_batch(
     client: openai.OpenAI,
     batch: list,
     model: str,
+    lang: str = "ru",
 ) -> Optional[list]:
     """Send one batch of comments to the LLM and return parsed predictions.
 
@@ -118,13 +176,15 @@ def classify_batch(
         client: A configured :class:`openai.OpenAI` client instance.
         batch:  List of raw comment strings (keep ≤ 80 for best results).
         model:  Model identifier, e.g. ``"deepseek/deepseek-chat"``.
+        lang:   Language for the prompt — ``"ru"`` (default) or ``"en"``.
 
     Returns:
         List of dicts ``{"id": int, "cluster": str, "sentiment": str}``,
         or ``None`` if the response could not be parsed.
     """
+    template = _PROMPT_TEMPLATE_EN if lang == "en" else _PROMPT_TEMPLATE
     numbered = "\n".join(f"{i + 1}. {text}" for i, text in enumerate(batch))
-    prompt = _PROMPT_TEMPLATE.format(comments=numbered)
+    prompt = template.format(comments=numbered)
 
     response = client.chat.completions.create(
         model=model,
@@ -142,6 +202,7 @@ def label_dataset(
     text_column: str = "comment",
     batch_size: int = 80,
     sleep_between_batches: float = 0.5,
+    lang: str = "ru",
 ) -> pd.DataFrame:
     """Label an entire DataFrame with cluster and sentiment predictions.
 
@@ -160,6 +221,7 @@ def label_dataset(
         text_column:             Column with raw comment text.
         batch_size:              Number of comments per API call.
         sleep_between_batches:   Seconds to wait between requests (rate limiting).
+        lang:                    Language for the prompt — ``"ru"`` (default) or ``"en"``.
 
     Returns:
         Copy of *df* with ``predicted_cluster`` and ``predicted_sentiment`` columns.
@@ -174,7 +236,7 @@ def label_dataset(
     for batch_num, batch in enumerate(tqdm(batches, desc="[ai_labeling] Labeling")):
         global_offset = batch_num * batch_size
         try:
-            results = classify_batch(client, batch, model)
+            results = classify_batch(client, batch, model, lang=lang)
             if results:
                 for item in results:
                     idx = global_offset + item["id"] - 1

@@ -49,6 +49,58 @@ patterns = {
     ),
 }
 
+# ---------------------------------------------------------------------------
+# English cluster patterns
+# ---------------------------------------------------------------------------
+
+patterns_en = {
+    # ONLY about the support BOT itself (automated agent), NOT human operators.
+    "chatbot": re.compile(
+        r"chat.?bot|\bbot\b|virtual assist|automat(ed|ic).{0,12}(repl|respon|messag|answer|system)"
+        r"|auto.?(repl|respon|answer)|canned (repl|respon|messag|answer)"
+        r"|robot.{0,10}(repl|respon|answer)|talking to a (bot|machine|robot)"
+        r"|\bAI\b.{0,15}(repl|respon|chat|assist|agent|support)",
+        re.IGNORECASE,
+    ),
+    # Late / missing delivery, stuck tracking, waiting for a specific order.
+    "delay": re.compile(
+        r"deliver(y|ed|ing)?|shipment|shipping|dispatch|courier|driver"
+        r"|track(ing)?|parcel|\bpackage\b"
+        r"|(hasn.t|haven.t|not|never|still not|yet to).{0,20}(arriv|deliver|receiv|show|come|turn up)"
+        r"|where.{0,12}(my )?(order|package|parcel|item)"
+        r"|(late|delayed|overdue|missing|lost|stuck).{0,15}(deliver|order|package|parcel|shipment|item)"
+        r"|(order|package|parcel|shipment|item).{0,15}(late|delayed|overdue|missing|lost|stuck)"
+        r"|(still |been )?wait(ing|ed).{0,20}(order|package|deliver|parcel|item|days?|weeks?)"
+        r"|(prime|2.day|next.?day|same.?day|overnight).{0,20}(late|delay|not (here|arriv|deliver)|still wait)",
+        re.IGNORECASE,
+    ),
+    # ONLY: same item's price changed within a short period.
+    "pricing": re.compile(
+        r"price.{0,20}(chang|went up|gone up|increas|jump|spike|hike|rais|drop|fell|fluctuat|vary|varies|differ)"
+        r"|(chang|went up|increas|jump|spike|hike|drop).{0,12}price"
+        r"|(was|were).{0,12}\$?\d.{0,15}(now|today).{0,12}\$?\d"
+        r"|(this morning|yesterday|last night|hour ago|day ago|earlier).{0,20}price"
+        r"|price.{0,20}(this morning|yesterday|last night|hour ago|day ago|earlier)"
+        r"|price.{0,12}(\d|several|multiple|few|keeps?).{0,8}(times?|chang|going up)"
+        r"|cart.{0,20}(different|higher|changed|wrong) price"
+        r"|price.{0,15}(checkout|cart).{0,15}(different|higher|changed|wrong)",
+        re.IGNORECASE,
+    ),
+    # Recommendation / suggestion algorithm quality — both negative and positive.
+    "recommendations": re.compile(
+        r"algorithm|personali[zs]"
+        r"|recommendation (engine|algorithm|system|feature|page|feed|tab)"
+        r"|(suggested|recommended) (for you|products?|items?|listing)"
+        r"|\bsuggested for you\b|\bpicks for you\b"
+        r"|(recommend|suggest|picks?).{0,25}(irrelevant|random|garbage|useless|terrible|wrong|spam|\bads?\b|same|already (bought|purchas|own))"
+        r"|(irrelevant|random|garbage|useless|terrible|wrong|already (bought|purchas|own)).{0,20}(recommend|suggest|picks?)"
+        r"|(love|spot on|perfect|amazing|impressed|on point|nailed).{0,20}(recommend|suggest|picks?)"
+        r"|(recommend|suggest|picks?).{0,20}(spot on|perfect|amazing|on point|always right|love)"
+        r"|why.{0,15}(recommend|suggest).{0,20}(this|that|me|already|same)",
+        re.IGNORECASE,
+    ),
+}
+
 # ── Shared morphological analyser ─────────────────────────────────────────────
 morph = MorphAnalyzer()
 

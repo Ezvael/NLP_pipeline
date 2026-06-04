@@ -1,6 +1,6 @@
 # Comments Analysis Pipeline
 
-An end-to-end NLP pipeline for analysing **Russian marketplace reviews** (Ozon, Wildberries, AliExpress, etc.).
+An end-to-end NLP pipeline for analysing **marketplace and e-commerce reviews** — supports both **Russian** (Ozon, Wildberries, AliExpress, VK) and **English** (Amazon, Reddit).
 
 Given raw comments the pipeline will:
 1. **Convert** raw JSON comments to a flat CSV.
@@ -215,12 +215,22 @@ Output columns: `url`, `comment`, `domain`.
 ### `label` — Label raw data with an LLM
 
 ```bash
+# Russian (default)
 python main.py label \
     --input_file  data/ozon_flat.csv \
     --output_file data/labeled/ozon_labeled.csv \
     --config      config.json \
     --batch_size  80
+
+# English
+python main.py label \
+    --input_file  data/reddit_comments.csv \
+    --output_file data/labeled/reddit_labeled.csv \
+    --config      config.json \
+    --lang        en
 ```
+
+Use `--lang en` for English-language data (Amazon, Reddit, etc.). The English prompt covers the same four cluster taxonomy with examples from e-commerce customer support.
 
 ### `train` — Train ML models
 
@@ -266,20 +276,18 @@ python main.py build_raw_counts \
 ### `dashboard` — Launch Streamlit dashboard
 
 ```bash
-python main.py dashboard --input_file predictions.csv
-# or directly:
-python -m streamlit run dashboard.py -- --input_file predictions.csv
-# or via the one-click launcher (uses data/predicted_sample.csv + data/raw_counts_per_date.csv):
-python run_dashboard.py
-```
+# Uses combined VK + Reddit data by default (data/all_predictions.csv)
+python main.py dashboard
 
-By default the dashboard looks for `data/raw_counts_per_date.csv` (already present in the
-repository). To point it at a different file use `--raw_counts`:
-
-```bash
+# Custom files
 python main.py dashboard \
-    --input_file predictions.csv \
-    --raw_counts path/to/other_raw_counts.csv
+    --input_file data/all_predictions.csv \
+    --raw_counts data/all_raw_counts.csv
+
+# Or launch directly with streamlit
+python -m streamlit run dashboard.py -- \
+    --input_file data/all_predictions.csv \
+    --raw_counts data/all_raw_counts.csv
 ```
 
 ---
@@ -290,7 +298,9 @@ python main.py dashboard \
 
 `dashboard.py` visualises a predictions CSV interactively.
 
-**Sidebar filters:** sentiment · domain · cluster · date range · free-text search
+**Sidebar filters:** sentiment · source · domain · cluster · date range · free-text search
+
+The **Source** filter distinguishes data origin: `vk` (Russian marketplace reviews) and `reddit` (English Amazon/AmazonPrime comments).
 
 **KPIs:** total posts · avg comment length · positive % · negative % · toxic %
 
@@ -302,12 +312,21 @@ python main.py dashboard \
 
 **Posts table:** up to 200 filtered rows.
 
-### Raw counts file
+### Combined data files
 
-The "Cluster mentions vs. total volume" chart requires `data/raw_counts_per_date.csv`.
-This file is included in the repository (pre-built from the training dataset).
+| File | Rows | Sources | Date range |
+|---|---|---|---|
+| `data/all_predictions.csv` | ~328k | vk + reddit | 2012–2026 |
+| `data/all_raw_counts.csv` | ~23k | vk + reddit | 2012–2026 |
 
-To rebuild it from your own data:
+`all_predictions.csv` columns: `comment, date, domain, predicted_cluster, transformer_sentiment, source`
+
+### Raw counts file (VK only)
+
+The "Cluster mentions vs. total volume" chart requires a raw counts file.
+`data/all_raw_counts.csv` is the combined VK + Reddit volume file.
+
+To rebuild VK raw counts from JSON sources:
 
 ```bash
 python main.py build_raw_counts \
@@ -315,10 +334,6 @@ python main.py build_raw_counts \
     --comments_dir "path/to/Raw json comments" \
     --output_file  data/raw_counts_per_date.csv
 ```
-
-It reads all `.json` files from `--posts_dir` (url → domain + Unix timestamp) and
-`--comments_dir` (url → list of comments), joins them by URL, and aggregates the total
-comment count by date and domain. The result is used as the denominator in the volume chart.
 
 ---
 
