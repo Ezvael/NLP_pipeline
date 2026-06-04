@@ -26,12 +26,16 @@ def parse_input_file() -> str:
 
 @st.cache_data
 def load_data(path: str):
+    # Accept both plain CSV and .gz compressed CSV
+    if not os.path.exists(path) and os.path.exists(path + ".gz"):
+        path = path + ".gz"
     if not os.path.exists(path):
         st.error(f"Data file not found: `{path}`\n\n"
                  "Run `python run_full_test.py` first to generate predictions.csv, "
                  "or pass a different path via `--input_file`.")
         st.stop()
-    df = pd.read_csv(path, encoding='utf-8-sig')
+    enc = None if path.endswith(".gz") else "utf-8-sig"
+    df = pd.read_csv(path, encoding=enc)
 
     # Normalise text column — accept several aliases for 'comment'
     for alias in ("Комментарий", "Kommentarij"):

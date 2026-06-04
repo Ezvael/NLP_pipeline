@@ -24,6 +24,10 @@ data/*
 !data/.gitkeep
 !data/predicted_sample.csv
 !data/raw_counts_per_date.csv
+# Compressed combined data files (gzip, safe for GitHub <100 MB)
+!data/all_predictions.csv.gz
+!data/predicted_sample.csv.gz
+!data/all_raw_counts.csv
 # Keep example data files
 !examples/**
 # Keep model artefacts
