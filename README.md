@@ -442,3 +442,6 @@ python dev/make_calibration_sample.py \
 | Symbol | Description |
 |--------|-------------|
 | `predict_transformer_sentiment(df, ...)` | RuBERT batch inference; auto-detects GPU |
+
+## Additional Data for other platforms
+https://disk.360.yandex.com/d/6yNaDhbMVxx8lA
