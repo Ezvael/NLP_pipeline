@@ -11,9 +11,9 @@ st.set_page_config(page_title="NLP Analytics Dashboard", layout="wide")
 
 def parse_args():
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--input_file", default=os.path.join(BASE_DIR, "data", "predicted_sample.csv"))
+    parser.add_argument("--input_file", default=os.path.join(BASE_DIR, "data", "all_predictions.csv.gz"))
     parser.add_argument("--raw_counts",
-                        default=os.path.join(BASE_DIR, "data", "raw_counts_per_date.csv"),
+                        default=os.path.join(BASE_DIR, "data", "all_raw_counts.csv"),
                         help="CSV with columns: date, domain, total_comments (raw counts)")
     args, _ = parser.parse_known_args()
     return args
